@@ -48,26 +48,12 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--accent-blue); border-radius: 2px; opacity: 0.5; }
 
-/* ---- Grid background ---- */
+/* ---- Grid background (kept for loading screen only) ---- */
 .hud-bg {
   position: fixed;
   inset: 0;
-  background:
-    linear-gradient(var(--bg-void) 0%, #030d1a 100%),
-    radial-gradient(ellipse at 20% 50%, rgba(0, 100, 180, 0.08) 0%, transparent 60%),
-    radial-gradient(ellipse at 80% 20%, rgba(0, 200, 255, 0.05) 0%, transparent 50%);
+  background: linear-gradient(var(--bg-void) 0%, #030d1a 100%);
   z-index: 0;
-}
-
-.hud-grid {
-  position: fixed;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(0, 212, 255, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 212, 255, 0.04) 1px, transparent 1px);
-  background-size: 40px 40px;
-  z-index: 0;
-  pointer-events: none;
 }
 
 /* ---- Layout ---- */
@@ -909,6 +895,101 @@ body {
 .detail-content ul, .detail-content ol {
   padding-left: 20px;
   margin: 6px 0;
+}
+
+/* ---- Greeting Overlay ---- */
+.greeting-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  background: rgba(2, 5, 9, 0.75);
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+}
+
+.greeting-rings {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.greeting-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 212, 255, 0.25);
+  animation: greeting-spin linear infinite;
+}
+
+.greeting-ring.r1 {
+  width: 260px; height: 260px;
+  border-style: dashed;
+  animation-duration: 12s;
+  border-color: rgba(0, 212, 255, 0.35);
+}
+.greeting-ring.r2 {
+  width: 380px; height: 380px;
+  animation-duration: 20s;
+  animation-direction: reverse;
+  border-color: rgba(0, 212, 255, 0.18);
+}
+.greeting-ring.r3 {
+  width: 520px; height: 520px;
+  animation-duration: 32s;
+  border-color: rgba(0, 212, 255, 0.08);
+}
+
+@keyframes greeting-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.greeting-logo {
+  position: relative;
+  z-index: 1;
+  width: 72px;
+  height: 72px;
+  border: 2px solid var(--accent-blue);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 30px rgba(0, 212, 255, 0.5), inset 0 0 20px rgba(0, 212, 255, 0.15);
+  animation: pulse-ring 2s ease-in-out infinite;
+  margin-bottom: 36px;
+}
+
+.greeting-lines {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0;
+  max-width: 520px;
+}
+
+.greeting-line {
+  line-height: 1.5;
+  will-change: opacity, transform;
+}
+
+.greeting-skip {
+  position: absolute;
+  bottom: 40px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--text-muted);
+  text-transform: uppercase;
 }
 
 /* ---- Loading ---- */

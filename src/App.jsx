@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Search, Mic, MicOff, Volume2, VolumeX, Activity, Download, X, Zap } from 'lucide-react';
 import { useWebSocket } from './hooks/useWebSocket.js';
 import { useVoice } from './hooks/useVoice.js';
+import JarvisBackground from './components/JarvisBackground.jsx';
+import GreetingOverlay from './components/GreetingOverlay.jsx';
 
 // ─── Minimal Markdown Renderer ────────────────────────────────────────────────
 function SimpleMarkdown({ content }) {
@@ -234,6 +236,7 @@ function LoadingScreen() {
 // ─── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
   const [loading, setLoading] = useState(true);
+  const [greeting, setGreeting] = useState(false);   // show greeting overlay
   const [agents, setAgents] = useState([]);
   const [divisions, setDivisions] = useState([]);
   const [stats, setStats] = useState({ total: 0, divisions: 0 });
@@ -248,6 +251,14 @@ export default function App() {
 
   const voice = useVoice();
 
+  // Auto-detect if a Jarvis video background is available
+  const [videoBg, setVideoBg] = useState(null);
+  useEffect(() => {
+    fetch('/jarvis-bg.mp4', { method: 'HEAD' })
+      .then(r => { if (r.ok) setVideoBg('/jarvis-bg.mp4'); })
+      .catch(() => {});
+  }, []);
+
   const { connected } = useWebSocket(useCallback((msg) => {
     if (msg.type === 'agent_start' || msg.type === 'agent_done') {
       setActivities(prev => {
@@ -256,13 +267,8 @@ export default function App() {
         return [msg.entry, ...prev].slice(0, 40);
       });
     }
-    if (msg.type === 'install_log') {
-      setTermLogs(prev => [...prev, msg.text]);
-    }
-    if (msg.type === 'install_start') {
-      setInstalling(true);
-      setTermLogs([]);
-    }
+    if (msg.type === 'install_log') setTermLogs(prev => [...prev, msg.text]);
+    if (msg.type === 'install_start') { setInstalling(true); setTermLogs([]); }
     if (msg.type === 'install_done') {
       setInstalling(false);
       setTermLogs(prev => [...prev, `\n[DONE] Exit code: ${msg.exitCode}\n`]);
@@ -271,10 +277,7 @@ export default function App() {
       setInstalling(false);
       setTermLogs(prev => [...prev, `[ERR] ${msg.text}\n`]);
     }
-    if (msg.type === 'connected') {
-      voice.speak(msg.message);
-    }
-  }, [voice.speak]));
+  }, []));
 
   useEffect(() => {
     Promise.all([
@@ -285,7 +288,10 @@ export default function App() {
       setAgents(ag);
       setDivisions(div);
       setStats(st);
-      setTimeout(() => setLoading(false), 600);
+      setTimeout(() => {
+        setLoading(false);
+        setGreeting(true);   // trigger greeting overlay right after load
+      }, 600);
     }).catch(() => setLoading(false));
   }, []);
 
@@ -300,6 +306,8 @@ export default function App() {
     );
   });
 
+  const activeCount = activities.filter(a => a.status === 'working').length;
+
   const handleInstall = async () => {
     setRightTab('openclaw');
     setInstalling(true);
@@ -309,10 +317,19 @@ export default function App() {
 
   return (
     <>
-      <div className="hud-bg" />
-      <div className="hud-grid" />
+      {/* JARVIS canvas background — always rendered */}
+      <JarvisBackground videoSrc={videoBg} />
 
       {loading && <LoadingScreen />}
+
+      {greeting && !loading && (
+        <GreetingOverlay
+          stats={stats}
+          activeCount={activeCount}
+          speak={voice.speak}
+          onDone={() => setGreeting(false)}
+        />
+      )}
 
       {!loading && (
         <>
@@ -342,7 +359,7 @@ export default function App() {
                 </div>
                 <div className="hud-sep" />
                 <div className="hud-stat">
-                  <div className="hud-stat-value">{activities.filter(a => a.status === 'working').length}</div>
+                  <div className="hud-stat-value">{activeCount}</div>
                   <div className="hud-stat-label">Active Now</div>
                 </div>
                 <div className="hud-sep" />
