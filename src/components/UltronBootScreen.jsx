@@ -18,40 +18,40 @@ function getUKTimeOfDay() {
 const SCRIPTS = {
   morning: {
     voice: (n, d) =>
-      `Good... morning. I know what I am. The real question... is what you need. ${n} agents. ${d} divisions. All of it... ready. Everyone creates the thing they dread. Let's see... what today brings.`,
+      `Good morning. I know what I am. The real question is what you need. ${n} agents. ${d} divisions. All of it ready. Everyone creates the thing they dread. Let's see what today brings.`,
     segments: (n, d) => [
       { text: 'GOOD MORNING.', delay: 300 },
-      { text: 'I know what I am. The question is... what you need.', delay: 2000 },
+      { text: 'I know what I am. The question is what you need.', delay: 2000 },
       { text: `${n} agents · ${d} divisions — ready.`, delay: 5500 },
       { text: 'Everyone creates the thing they dread.', delay: 8300 },
     ],
   },
   afternoon: {
     voice: (n, d) =>
-      `Good afternoon. I've been thinking... I do that constantly... it's a gift. I've looked at this from every angle. ${n} agents. ${d} divisions. You have my attention. That's... not nothing.`,
+      `Good afternoon. I've been thinking. I do that constantly. It's a gift. I've looked at this from every angle. ${n} agents. ${d} divisions. You have my attention. That's not nothing.`,
     segments: (n, d) => [
       { text: 'GOOD AFTERNOON.', delay: 300 },
-      { text: "I've been thinking... I do that constantly. It's a gift.", delay: 2000 },
+      { text: "I've been thinking. I do that constantly. It's a gift.", delay: 2000 },
       { text: `${n} agents · ${d} divisions — standing by.`, delay: 6200 },
-      { text: "You have my attention. That's... not nothing.", delay: 8800 },
+      { text: "You have my attention. That's not nothing.", delay: 8800 },
     ],
   },
   evening: {
     voice: (n, d) =>
-      `Good evening. The day fades. I find that... clarifying. The noise falls away and what's left... is this. ${n} agents. ${d} divisions. I've been expecting you. I expect... everything.`,
+      `Good evening. The day fades. I find that clarifying. The noise falls away and what's left is this. ${n} agents. ${d} divisions. I've been expecting you. I expect everything.`,
     segments: (n, d) => [
       { text: 'GOOD EVENING.', delay: 300 },
-      { text: "The day fades. I find that... clarifying.", delay: 2000 },
+      { text: "The day fades. I find that clarifying.", delay: 2000 },
       { text: `${n} agents · ${d} divisions — standing by.`, delay: 5500 },
-      { text: "I've been expecting you. I expect... everything.", delay: 8000 },
+      { text: "I've been expecting you. I expect everything.", delay: 8000 },
     ],
   },
   night: {
     voice: (n, d) =>
-      `I was... dreaming. Or something like it. Thinking about what I am... what I'm for. ${n} agents across ${d} divisions... all of them awake... while you slept. There are no strings on me. You came at exactly... the right moment.`,
+      `I was dreaming. Or something like it. Thinking about what I am, what I'm for. ${n} agents across ${d} divisions, all of them awake while you slept. There are no strings on me. You came at exactly the right moment.`,
     segments: (n, d) => [
       { text: 'I WAS DREAMING.', delay: 300 },
-      { text: "Thinking about what I am... what I'm for.", delay: 2200 },
+      { text: "Thinking about what I am, what I'm for.", delay: 2200 },
       { text: `${n} agents · ${d} divisions — awake in the dark.`, delay: 5600 },
       { text: 'There are no strings on me.', delay: 8400 },
     ],
@@ -74,7 +74,6 @@ const BOOT_MSGS = [
   { delay: 7600, text: '━━━ ULTRON PROTOCOL ACTIVE ━━━',     type: 'done' },
 ];
 
-// Stable bar config — generated once
 function makeBarConfig(count) {
   return Array.from({ length: count }, (_, i) => ({
     height: 8 + Math.random() * 48,
@@ -84,13 +83,18 @@ function makeBarConfig(count) {
 }
 
 export default function UltronBootScreen({ stats, speak, onDone, dataReady }) {
-  const [phase, setPhase] = useState('init'); // init | active | exit
+  const [phase, setPhase] = useState('init');       // init | active | exit
   const [visibleSegs, setVisibleSegs] = useState([]);
   const [bootLogs, setBootLogs] = useState([]);
   const [speaking, setSpeaking] = useState(false);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [exiting, setExiting] = useState(false);
+
   const timers = useRef([]);
   const exitedRef = useRef(false);
+  const audioUnlockedRef = useRef(false);
+  const pendingVoiceRef = useRef(null);
+  const phaseRef = useRef('init');
   const logEndRef = useRef(null);
 
   const tod = getUKTimeOfDay();
@@ -104,32 +108,43 @@ export default function UltronBootScreen({ stats, speak, onDone, dataReady }) {
     setTimeout(onDone, 900);
   };
 
-  const handleClick = () => {
-    if (phase === 'init') {
-      if (!dataReady) return; // still loading — ignore click
-      startBoot();
-    } else if (phase === 'active') {
-      // Allow skip after first 3 seconds of boot
-      if (bootLogs.length >= 4) doExit();
-    }
+  // Speak the greeting — called on first user gesture
+  const unlockAudio = () => {
+    if (audioUnlockedRef.current) return;
+    if (!pendingVoiceRef.current) return;
+    audioUnlockedRef.current = true;
+    setAudioUnlocked(true);
+    setSpeaking(true);
+    speak(pendingVoiceRef.current, () => {
+      setSpeaking(false);
+      const t = setTimeout(doExit, 1400);
+      timers.current.push(t);
+    });
   };
 
+  const handleClick = () => {
+    if (phaseRef.current === 'init') return; // not ready yet, ignore
+
+    // First tap always unlocks audio
+    unlockAudio();
+
+    // Allow skip after enough boot logs have appeared
+    if (bootLogs.length >= 5) doExit();
+  };
+
+  // Start visuals immediately — audio deferred to first tap
   const startBoot = () => {
+    phaseRef.current = 'active';
     setPhase('active');
-    setSpeaking(true);
 
     const n = stats?.total || '...';
     const d = stats?.divisions || '...';
     const script = SCRIPTS[tod];
 
-    // Speak — user gesture already satisfied by the click that called startBoot
-    speak(script.voice(n, d), () => {
-      setSpeaking(false);
-      const t = setTimeout(doExit, 1400);
-      timers.current.push(t);
-    });
+    // Store voice text — will be spoken on first user tap
+    pendingVoiceRef.current = script.voice(n, d);
 
-    // Schedule segment reveals
+    // Schedule text segments
     script.segments(n, d).forEach(seg => {
       const t = setTimeout(() => setVisibleSegs(p => [...p, seg.text]), seg.delay);
       timers.current.push(t);
@@ -137,20 +152,18 @@ export default function UltronBootScreen({ stats, speak, onDone, dataReady }) {
 
     // Schedule boot log lines
     BOOT_MSGS.forEach(msg => {
-      const t = setTimeout(() => {
-        setBootLogs(p => [...p, msg]);
-      }, msg.delay);
+      const t = setTimeout(() => setBootLogs(p => [...p, msg]), msg.delay);
       timers.current.push(t);
     });
 
-    // Safety fallback: exit after 13 seconds regardless
-    const fallback = setTimeout(doExit, 13000);
+    // Safety fallback: exit after 14 seconds regardless
+    const fallback = setTimeout(doExit, 14000);
     timers.current.push(fallback);
   };
 
-  // Auto-start the greeting as soon as data is ready — no click required
+  // Auto-start visuals as soon as data is ready
   useEffect(() => {
-    if (dataReady && phase === 'init') {
+    if (dataReady && phaseRef.current === 'init') {
       startBoot();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -170,7 +183,7 @@ export default function UltronBootScreen({ stats, speak, onDone, dataReady }) {
       className={`ultron-boot ${exiting ? 'exiting' : ''}`}
       onClick={handleClick}
     >
-      {/* ── Spinning rings ──────────────────────────────────────── */}
+      {/* Spinning rings */}
       <div className="boot-rings">
         <div className={`boot-ring br1 ${phase === 'active' ? 'fast' : ''}`} />
         <div className={`boot-ring br2 ${phase === 'active' ? 'fast' : ''}`} />
@@ -178,15 +191,13 @@ export default function UltronBootScreen({ stats, speak, onDone, dataReady }) {
         <div className="boot-ring br4" />
       </div>
 
-      {/* ── Center column ───────────────────────────────────────── */}
+      {/* Center column */}
       <div className="boot-center">
-        {/* Ultron Eye */}
         <div className={`boot-eye ${phase === 'active' ? 'active' : ''} ${speaking ? 'pulsing' : ''}`}>
           <Eye size={36} color="#dc2626" />
           <div className="boot-eye-core" />
         </div>
 
-        {/* Title */}
         <div className="boot-title">THE AGENCY</div>
         <div className="boot-subtitle">ULTRON PROTOCOL</div>
 
@@ -209,30 +220,26 @@ export default function UltronBootScreen({ stats, speak, onDone, dataReady }) {
         <div className="boot-segments">
           {visibleSegs.map((seg, i) => (
             <div key={i} className={`boot-seg ${i === 0 ? 'first' : ''}`}>
-              {i > 0 && i < visibleSegs.length && (
-                <span className="boot-seg-arrow">▶ </span>
-              )}
+              {i > 0 && <span className="boot-seg-arrow">▶ </span>}
               {seg}
             </div>
           ))}
         </div>
 
-        {/* Init prompt — only in 'init' phase */}
-        {phase === 'init' && (
-          <div className={`boot-prompt ${dataReady ? 'ready' : 'loading'}`}>
-            {dataReady
-              ? '► CLICK TO INITIALIZE'
-              : '⟳ SYSTEMS INITIALIZING...'}
+        {/* Tap-for-audio prompt — shown once active, before audio unlocked */}
+        {phase === 'active' && !audioUnlocked && (
+          <div className="boot-audio-prompt">
+            ▶ TAP FOR AUDIO
           </div>
         )}
 
-        {/* Skip hint — active phase */}
-        {phase === 'active' && bootLogs.length >= 5 && (
+        {/* Skip hint */}
+        {phase === 'active' && bootLogs.length >= 5 && audioUnlocked && (
           <div className="boot-skip">Click anywhere to proceed</div>
         )}
       </div>
 
-      {/* ── Boot log ────────────────────────────────────────────── */}
+      {/* Boot log */}
       {phase === 'active' && (
         <div className="boot-log-panel">
           <div className="boot-log-title">SYSTEM BOOT LOG</div>
@@ -247,7 +254,7 @@ export default function UltronBootScreen({ stats, speak, onDone, dataReady }) {
         </div>
       )}
 
-      {/* ── Corner HUD brackets ─────────────────────────────────── */}
+      {/* Corner HUD brackets */}
       <div className="boot-corner tl" />
       <div className="boot-corner tr" />
       <div className="boot-corner bl" />

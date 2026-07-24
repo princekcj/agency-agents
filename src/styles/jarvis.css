@@ -1237,6 +1237,18 @@ body {
   50%       { opacity: 0.35; }
 }
 
+/* ── Tap-for-audio prompt ── */
+.boot-audio-prompt {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--accent-blue);
+  text-shadow: 0 0 10px rgba(220,38,38,0.5);
+  margin-top: 14px;
+  animation: prompt-blink 1.1s ease-in-out infinite;
+}
+
 /* ── Skip hint ── */
 .boot-skip {
   font-family: var(--font-mono);
