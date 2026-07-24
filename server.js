@@ -8,8 +8,8 @@ import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 import { spawn } from 'child_process';
 
-// ElevenLabs voice ID — Daniel: deepest, most authoritative premade voice
-const ELEVENLABS_VOICE_ID = 'onwK4e9ZLuTAKqWW03F9';
+// ElevenLabs voice ID
+const ELEVENLABS_VOICE_ID = 'Vs5CmVCVJwW4odQS2pVf';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -133,9 +133,9 @@ app.post('/api/tts', async (req, res) => {
           text,
           model_id: 'eleven_multilingual_v2',
           voice_settings: {
-            stability: 0.15,
-            similarity_boost: 0.90,
-            style: 0.75,
+            stability: 0.52,
+            similarity_boost: 0.88,
+            style: 0.60,
             use_speaker_boost: true,
           },
         }),
@@ -187,6 +187,40 @@ app.post('/api/activity', (req, res) => {
 
 app.get('/api/activities', (req, res) => {
   res.json(activityLog.slice(0, 40));
+});
+
+// 24-hour activity stats
+app.get('/api/stats/24h', (req, res) => {
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  const recent = activityLog.filter(e => new Date(e.startedAt).getTime() > cutoff);
+
+  // Count by division
+  const divMap = {};
+  for (const e of recent) {
+    const key = e.division;
+    if (!divMap[key]) divMap[key] = { id: key, label: DIVISIONS[key]?.label || key, color: DIVISIONS[key]?.color || '#dc2626', count: 0 };
+    divMap[key].count++;
+  }
+  const byDivision = Object.values(divMap).sort((a, b) => b.count - a.count);
+
+  // Top agents
+  const agentMap = {};
+  for (const e of recent) {
+    if (!agentMap[e.agentId]) agentMap[e.agentId] = { agentId: e.agentId, agentName: e.agentName, agentEmoji: e.agentEmoji || '🤖', count: 0 };
+    agentMap[e.agentId].count++;
+  }
+  const topAgents = Object.values(agentMap).sort((a, b) => b.count - a.count).slice(0, 8);
+
+  // By hour (last 24h, bucketed)
+  const hourBuckets = {};
+  for (let h = 0; h < 24; h++) hourBuckets[h] = 0;
+  for (const e of recent) {
+    const h = new Date(e.startedAt).getHours();
+    hourBuckets[h] = (hourBuckets[h] || 0) + 1;
+  }
+  const byHour = Object.entries(hourBuckets).map(([hour, count]) => ({ hour: Number(hour), count }));
+
+  res.json({ total: recent.length, byDivision, topAgents, byHour });
 });
 
 // Run OpenClaw install — streams output via WebSocket
