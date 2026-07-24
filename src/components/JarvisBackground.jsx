@@ -1,17 +1,14 @@
 import React, { useEffect, useRef } from 'react';
 
 /**
- * Procedural JARVIS HUD canvas background.
- * Draws animated arc-reactor rings, rotating arcs, hex grid,
- * data-stream particles and scan lines — all on a <canvas> that
- * fills the viewport behind the UI.
+ * Ultron Protocol — procedural canvas background.
+ * Arc-reactor rings, hex grid, data-stream particles — all in Ultron red.
  */
 export default function JarvisBackground({ videoSrc }) {
   const canvasRef = useRef(null);
   const rafRef = useRef(null);
 
   useEffect(() => {
-    // If a video source is provided, skip canvas
     if (videoSrc) return;
 
     const canvas = canvasRef.current;
@@ -40,7 +37,7 @@ export default function JarvisBackground({ videoSrc }) {
         vy: -0.3 - Math.random() * 0.5,
         size: 1 + Math.random() * 2,
         alpha: 0.2 + Math.random() * 0.5,
-        color: Math.random() > 0.6 ? '#00ffea' : '#00d4ff',
+        color: Math.random() > 0.6 ? '#ff6b6b' : '#dc2626',
       };
     }
 
@@ -66,17 +63,17 @@ export default function JarvisBackground({ videoSrc }) {
       ctx.closePath();
     }
 
-    // ── Arc reactor rings config ────────────────────────────────
+    // ── Arc reactor rings ───────────────────────────────────────
     const rings = [
-      { r: 60,  speed: 0.004,  dash: [8, 6],   dir: 1,  alpha: 0.9 },
-      { r: 90,  speed: -0.003, dash: [16, 8],  dir: -1, alpha: 0.7 },
-      { r: 130, speed: 0.002,  dash: [4, 12],  dir: 1,  alpha: 0.5 },
-      { r: 180, speed: -0.0015,dash: [20, 10], dir: -1, alpha: 0.4 },
-      { r: 240, speed: 0.001,  dash: [6, 20],  dir: 1,  alpha: 0.25 },
-      { r: 320, speed: -0.0008,dash: [30, 15], dir: -1, alpha: 0.15 },
+      { r: 60,  speed: 0.004,   dash: [8, 6],   alpha: 0.9 },
+      { r: 90,  speed: -0.003,  dash: [16, 8],  alpha: 0.7 },
+      { r: 130, speed: 0.002,   dash: [4, 12],  alpha: 0.5 },
+      { r: 180, speed: -0.0015, dash: [20, 10], alpha: 0.35 },
+      { r: 240, speed: 0.001,   dash: [6, 20],  alpha: 0.22 },
+      { r: 320, speed: -0.0008, dash: [30, 15], alpha: 0.12 },
     ];
 
-    // ── Corner HUD brackets ────────────────────────────────────
+    // ── Corner HUD brackets ─────────────────────────────────────
     function drawCornerBracket(ctx, x, y, size, flipX, flipY) {
       const sx = flipX ? -1 : 1;
       const sy = flipY ? -1 : 1;
@@ -90,13 +87,13 @@ export default function JarvisBackground({ videoSrc }) {
       ctx.restore();
     }
 
-    // ── Data-stream columns ────────────────────────────────────
+    // ── Data-stream columns ─────────────────────────────────────
     const COLS = Math.floor(W / 24);
     const streams = Array.from({ length: COLS }, (_, i) => ({
       x: i * 24 + 12,
       y: Math.random() * H,
       speed: 0.5 + Math.random() * 1.5,
-      alpha: 0.05 + Math.random() * 0.1,
+      alpha: 0.04 + Math.random() * 0.08,
       char: () => String.fromCharCode(0x30A0 + Math.floor(Math.random() * 96)),
     }));
 
@@ -108,11 +105,11 @@ export default function JarvisBackground({ videoSrc }) {
       scanY = (scanY + 0.8) % H;
 
       // ── Background ──────────────────────────────────────────
-      ctx.fillStyle = 'rgba(2, 5, 9, 0.55)';
+      ctx.fillStyle = 'rgba(7, 0, 0, 0.55)';
       ctx.fillRect(0, 0, W, H);
 
       // ── Hex grid (subtle) ───────────────────────────────────
-      ctx.strokeStyle = 'rgba(0, 212, 255, 0.025)';
+      ctx.strokeStyle = 'rgba(220, 38, 38, 0.025)';
       ctx.lineWidth = 0.5;
       ctx.setLineDash([]);
       for (const { x, y } of hexPoints) {
@@ -123,16 +120,16 @@ export default function JarvisBackground({ videoSrc }) {
       // ── Data streams ────────────────────────────────────────
       ctx.font = '10px monospace';
       for (const s of streams) {
-        ctx.fillStyle = `rgba(0,212,255,${s.alpha})`;
+        ctx.fillStyle = `rgba(220,38,38,${s.alpha})`;
         ctx.fillText(s.char(), s.x, s.y);
         s.y += s.speed;
-        if (s.y > H) { s.y = -10; s.alpha = 0.04 + Math.random() * 0.08; }
+        if (s.y > H) { s.y = -10; s.alpha = 0.03 + Math.random() * 0.06; }
       }
 
       // ── Radial glow centre ──────────────────────────────────
       const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, 350);
-      grd.addColorStop(0, 'rgba(0,180,255,0.06)');
-      grd.addColorStop(0.4, 'rgba(0,100,200,0.03)');
+      grd.addColorStop(0, 'rgba(180,0,0,0.07)');
+      grd.addColorStop(0.4, 'rgba(100,0,0,0.03)');
       grd.addColorStop(1, 'transparent');
       ctx.fillStyle = grd;
       ctx.fillRect(0, 0, W, H);
@@ -146,20 +143,20 @@ export default function JarvisBackground({ videoSrc }) {
         ctx.beginPath();
         ctx.arc(0, 0, ring.r, 0, Math.PI * 2);
         ctx.setLineDash(ring.dash);
-        ctx.strokeStyle = `rgba(0,212,255,${ring.alpha})`;
+        ctx.strokeStyle = `rgba(220,38,38,${ring.alpha})`;
         ctx.lineWidth = 1;
-        ctx.shadowColor = '#00d4ff';
+        ctx.shadowColor = '#dc2626';
         ctx.shadowBlur = 8;
         ctx.stroke();
         ctx.restore();
       }
 
-      // ── Inner arc reactor glow ──────────────────────────────
+      // ── Inner reactor glow ──────────────────────────────────
       ctx.save();
       ctx.translate(cx, cy);
       const innerGrd = ctx.createRadialGradient(0, 0, 0, 0, 0, 50);
-      innerGrd.addColorStop(0, `rgba(0,220,255,${0.15 + 0.05 * Math.sin(t * 2)})`);
-      innerGrd.addColorStop(0.5, 'rgba(0,150,220,0.05)');
+      innerGrd.addColorStop(0, `rgba(220,38,38,${0.18 + 0.06 * Math.sin(t * 2)})`);
+      innerGrd.addColorStop(0.5, 'rgba(150,0,0,0.06)');
       innerGrd.addColorStop(1, 'transparent');
       ctx.fillStyle = innerGrd;
       ctx.beginPath();
@@ -168,7 +165,7 @@ export default function JarvisBackground({ videoSrc }) {
 
       // Spokes
       ctx.setLineDash([]);
-      ctx.strokeStyle = `rgba(0,212,255,0.35)`;
+      ctx.strokeStyle = `rgba(220,38,38,0.35)`;
       ctx.lineWidth = 1;
       for (let i = 0; i < 6; i++) {
         const a = (Math.PI / 3) * i + t * 0.3;
@@ -181,7 +178,7 @@ export default function JarvisBackground({ videoSrc }) {
 
       // ── Crosshair ───────────────────────────────────────────
       ctx.setLineDash([4, 6]);
-      ctx.strokeStyle = 'rgba(0,212,255,0.15)';
+      ctx.strokeStyle = 'rgba(220,38,38,0.12)';
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(0, cy); ctx.lineTo(W, cy);
@@ -191,7 +188,7 @@ export default function JarvisBackground({ videoSrc }) {
       // ── Corner brackets ─────────────────────────────────────
       const BW = 40;
       ctx.setLineDash([]);
-      ctx.strokeStyle = 'rgba(0,212,255,0.5)';
+      ctx.strokeStyle = 'rgba(220,38,38,0.5)';
       ctx.lineWidth = 1.5;
       drawCornerBracket(ctx, 20, 70, BW, false, false);
       drawCornerBracket(ctx, W - 20, 70, BW, true, false);
@@ -201,7 +198,7 @@ export default function JarvisBackground({ videoSrc }) {
       // ── Scan line ───────────────────────────────────────────
       const scanGrd = ctx.createLinearGradient(0, scanY - 30, 0, scanY + 30);
       scanGrd.addColorStop(0, 'transparent');
-      scanGrd.addColorStop(0.5, 'rgba(0,212,255,0.04)');
+      scanGrd.addColorStop(0.5, 'rgba(220,38,38,0.04)');
       scanGrd.addColorStop(1, 'transparent');
       ctx.fillStyle = scanGrd;
       ctx.setLineDash([]);
@@ -209,12 +206,10 @@ export default function JarvisBackground({ videoSrc }) {
 
       // ── Particles ───────────────────────────────────────────
       for (const p of particles) {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fillStyle = p.color.replace(')', `,${p.alpha})`).replace('rgb', 'rgba');
-        // hack: just use globalAlpha
         ctx.globalAlpha = p.alpha;
         ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fill();
         ctx.globalAlpha = 1;
         p.x += p.vx;

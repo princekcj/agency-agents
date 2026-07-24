@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Search, Mic, MicOff, Volume2, VolumeX, Activity, Download, X, Zap } from 'lucide-react';
+import { Search, Mic, MicOff, Volume2, VolumeX, Activity, Download, X, Eye } from 'lucide-react';
 import { useWebSocket } from './hooks/useWebSocket.js';
 import { useVoice } from './hooks/useVoice.js';
 import JarvisBackground from './components/JarvisBackground.jsx';
@@ -57,7 +57,7 @@ function AgentCard({ agent, onSelect, onSpeak }) {
       <button
         className="agent-speak-btn"
         onClick={(e) => { e.stopPropagation(); onSpeak(agent); }}
-        title="Have JARVIS brief you on this agent"
+        title="Have Ultron brief you on this agent"
       >
         <Volume2 size={10} /> Brief
       </button>
@@ -86,7 +86,7 @@ function AgentDetail({ agent, onClose, onSpeak }) {
         </div>
         <div className="detail-actions">
           <button className="detail-action-btn btn-speak" onClick={() => onSpeak(agent)}>
-            <Volume2 size={12} /> JARVIS Brief
+            <Volume2 size={12} /> Ultron Brief
           </button>
           <button className="detail-action-btn btn-close" onClick={onClose}>
             <X size={12} /> Close
@@ -104,20 +104,19 @@ function AgentDetail({ agent, onClose, onSpeak }) {
 function ActivityFeed({ activities }) {
   const feedRef = useRef(null);
   useEffect(() => {
-    if (feedRef.current) feedRef.current.scrollTop = feedRef.current.scrollHeight;
+    if (feedRef.current) feedRef.current.scrollTop = 0;
   }, [activities]);
-
-  const sorted = [...activities].sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
 
   return (
     <div className="activity-feed" ref={feedRef}>
-      {sorted.length === 0 && (
+      {activities.length === 0 && (
         <div className="empty-state">
           <Activity size={24} opacity={0.3} />
-          <span>Awaiting agent activity...</span>
+          <span>No activity yet.</span>
+          <span style={{ fontSize: 10, opacity: 0.6 }}>Open an agent to begin.</span>
         </div>
       )}
-      {sorted.map(item => (
+      {activities.map(item => (
         <div key={item.id} className={`activity-item ${item.status}`}>
           <div className="activity-item-header">
             <span className="activity-emoji">{item.agentEmoji}</span>
@@ -125,7 +124,6 @@ function ActivityFeed({ activities }) {
             <span className={`activity-status ${item.status}`} />
           </div>
           <div className="activity-action">{item.action}</div>
-          {item.result && <div className="activity-result">{item.result}</div>}
           <div className="activity-div" style={{ color: item.divisionColor }}>{item.division}</div>
         </div>
       ))}
@@ -145,7 +143,7 @@ function OpenClawPanel({ logs, onInstall, installing }) {
       <div className="openclaw-header">OpenClaw Deployment</div>
       <div className="openclaw-desc">
         Convert and install all Agency agents into your OpenClaw workspace. Agents are deployed to{' '}
-        <code style={{ fontFamily: 'monospace', fontSize: 10, color: '#e11d48' }}>~/.openclaw/agency-agents/</code>
+        <code style={{ fontFamily: 'monospace', fontSize: 10, color: '#dc2626' }}>~/.openclaw/agency-agents/</code>
       </div>
       <button className="install-btn" onClick={onInstall} disabled={installing}>
         <Download size={14} />
@@ -153,7 +151,7 @@ function OpenClawPanel({ logs, onInstall, installing }) {
       </button>
       <div className="terminal" ref={termRef}>
         {logs.length === 0 ? (
-          <span style={{ color: '#3a6a8a' }}>
+          <span style={{ color: '#6a2020' }}>
             {'> '}OpenClaw terminal ready. Click DEPLOY to begin.<span className="terminal-cursor" />
           </span>
         ) : (
@@ -186,14 +184,14 @@ function VoiceModal({ voice, onClose }) {
     <div className="voice-overlay" onClick={onClose}>
       <div className="voice-modal" onClick={e => e.stopPropagation()}>
         <div className={`voice-orb ${state}`}>
-          {listening ? '🎙️' : speaking ? '🔊' : '🤖'}
+          {listening ? '🎙️' : speaking ? '🔊' : <Eye size={32} color="#dc2626" />}
         </div>
-        <div className="voice-title">JARVIS INTERFACE</div>
+        <div className="voice-title">ULTRON INTERFACE</div>
         <div className="voice-transcript">
           {transcript || (listening ? 'Listening...' : 'Say a command or agent name')}
         </div>
         <div className="voice-response">
-          {response || (speaking ? 'Speaking...' : 'Awaiting input')}
+          {response || (speaking ? 'Speaking...' : 'Awaiting your command')}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {!listening ? (
@@ -207,7 +205,7 @@ function VoiceModal({ voice, onClose }) {
           )}
           {speaking && (
             <button className="voice-btn" onClick={stopSpeaking} style={{ padding: '8px 20px' }}>
-              <VolumeX size={14} /> Mute
+              <VolumeX size={14} /> Silence
             </button>
           )}
         </div>
@@ -222,11 +220,11 @@ function LoadingScreen() {
   return (
     <div className="loading-screen">
       <div className="loading-title">THE AGENCY</div>
-      <div className="loading-sub">JARVIS COMMAND CENTER — INITIALIZING</div>
+      <div className="loading-sub">ULTRON PROTOCOL — INITIALIZING</div>
       <div className="loading-bar-wrap">
         <div className="loading-bar" />
       </div>
-      <div style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: '#3a6a8a', letterSpacing: 2 }}>
+      <div style={{ fontFamily: 'Share Tech Mono', fontSize: 10, color: '#6a2020', letterSpacing: 2 }}>
         LOADING AGENTS...
       </div>
     </div>
@@ -236,7 +234,7 @@ function LoadingScreen() {
 // ─── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
   const [loading, setLoading] = useState(true);
-  const [greeting, setGreeting] = useState(false);   // show greeting overlay
+  const [greeting, setGreeting] = useState(false);
   const [agents, setAgents] = useState([]);
   const [divisions, setDivisions] = useState([]);
   const [stats, setStats] = useState({ total: 0, divisions: 0 });
@@ -251,7 +249,6 @@ export default function App() {
 
   const voice = useVoice();
 
-  // Auto-detect if a Jarvis video background is available
   const [videoBg, setVideoBg] = useState(null);
   useEffect(() => {
     fetch('/jarvis-bg.mp4', { method: 'HEAD' })
@@ -259,8 +256,30 @@ export default function App() {
       .catch(() => {});
   }, []);
 
+  // ── Post a real activity event to the server ──────────────────────────────
+  const trackActivity = useCallback(async (agent, action) => {
+    try {
+      await fetch('/api/activity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentId: agent.id,
+          agentName: agent.name,
+          agentEmoji: agent.emoji,
+          division: agent.division,
+          divisionColor: agent.divisionColor,
+          action,
+        }),
+      });
+    } catch {}
+  }, []);
+
   const { connected } = useWebSocket(useCallback((msg) => {
-    if (msg.type === 'agent_start' || msg.type === 'agent_done') {
+    // Load initial activity state when WS connects
+    if (msg.type === 'activity_state') {
+      setActivities(msg.entries || []);
+    }
+    if (msg.type === 'agent_done') {
       setActivities(prev => {
         const exists = prev.find(a => a.id === msg.entry.id);
         if (exists) return prev.map(a => a.id === msg.entry.id ? msg.entry : a);
@@ -284,13 +303,15 @@ export default function App() {
       fetch('/api/agents').then(r => r.json()).catch(() => []),
       fetch('/api/divisions').then(r => r.json()).catch(() => []),
       fetch('/api/stats').then(r => r.json()).catch(() => ({ total: 0, divisions: 0 })),
-    ]).then(([ag, div, st]) => {
+      fetch('/api/activities').then(r => r.json()).catch(() => []),
+    ]).then(([ag, div, st, acts]) => {
       setAgents(ag);
       setDivisions(div);
       setStats(st);
+      setActivities(acts);
       setTimeout(() => {
         setLoading(false);
-        setGreeting(true);   // trigger greeting overlay right after load
+        setGreeting(true);
       }, 600);
     }).catch(() => setLoading(false));
   }, []);
@@ -306,7 +327,15 @@ export default function App() {
     );
   });
 
-  const activeCount = activities.filter(a => a.status === 'working').length;
+  const handleSelectAgent = useCallback((agent) => {
+    setSelectedAgent(agent);
+    trackActivity(agent, 'Accessed');
+  }, [trackActivity]);
+
+  const handleSpeakAgent = useCallback((agent) => {
+    voice.speakAgent(agent);
+    trackActivity(agent, 'Briefed');
+  }, [voice, trackActivity]);
 
   const handleInstall = async () => {
     setRightTab('openclaw');
@@ -317,7 +346,6 @@ export default function App() {
 
   return (
     <>
-      {/* JARVIS canvas background — always rendered */}
       <JarvisBackground videoSrc={videoBg} />
 
       {loading && <LoadingScreen />}
@@ -325,7 +353,6 @@ export default function App() {
       {greeting && !loading && (
         <GreetingOverlay
           stats={stats}
-          activeCount={activeCount}
           speak={voice.speak}
           onDone={() => setGreeting(false)}
         />
@@ -339,11 +366,11 @@ export default function App() {
             <header className="hud-header">
               <div className="hud-logo">
                 <div className="hud-logo-icon">
-                  <Zap size={14} color="#00d4ff" />
+                  <Eye size={14} color="#dc2626" />
                 </div>
                 <div>
                   <div className="hud-logo-title">THE AGENCY</div>
-                  <div className="hud-logo-sub">JARVIS Command Center</div>
+                  <div className="hud-logo-sub">ULTRON PROTOCOL</div>
                 </div>
               </div>
 
@@ -359,8 +386,8 @@ export default function App() {
                 </div>
                 <div className="hud-sep" />
                 <div className="hud-stat">
-                  <div className="hud-stat-value">{activeCount}</div>
-                  <div className="hud-stat-label">Active Now</div>
+                  <div className="hud-stat-value">{activities.length}</div>
+                  <div className="hud-stat-label">Interactions</div>
                 </div>
                 <div className="hud-sep" />
                 <div className="hud-stat">
@@ -383,7 +410,7 @@ export default function App() {
                   className={`division-item ${!activeDivision ? 'active' : ''}`}
                   onClick={() => setActiveDivision(null)}
                 >
-                  <div className="division-dot" style={{ background: '#00d4ff' }} />
+                  <div className="division-dot" style={{ background: '#dc2626' }} />
                   <span className="division-name">All Divisions</span>
                   <span className="division-count">{stats.total}</span>
                 </div>
@@ -416,10 +443,10 @@ export default function App() {
                 <button
                   className={`voice-btn ${voice.listening ? 'listening' : ''}`}
                   onClick={() => setShowVoice(true)}
-                  title="Open JARVIS voice interface"
+                  title="Open Ultron voice interface"
                 >
                   {voice.speaking ? <Volume2 size={13} /> : <Mic size={13} />}
-                  JARVIS
+                  ULTRON
                 </button>
               </div>
 
@@ -434,8 +461,8 @@ export default function App() {
                     <AgentCard
                       key={agent.id}
                       agent={agent}
-                      onSelect={setSelectedAgent}
-                      onSpeak={voice.speakAgent}
+                      onSelect={handleSelectAgent}
+                      onSpeak={handleSpeakAgent}
                     />
                   ))
                 )}
@@ -478,7 +505,7 @@ export default function App() {
             <AgentDetail
               agent={selectedAgent}
               onClose={() => setSelectedAgent(null)}
-              onSpeak={voice.speakAgent}
+              onSpeak={handleSpeakAgent}
             />
           )}
 

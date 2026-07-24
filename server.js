@@ -47,8 +47,7 @@ function loadAgents() {
           slug,
           division: div,
           divisionLabel: DIVISIONS[div]?.label || div,
-          divisionColor: DIVISIONS[div]?.color || '#6366F1',
-          divisionIcon: DIVISIONS[div]?.icon || 'Sparkles',
+          divisionColor: DIVISIONS[div]?.color || '#dc2626',
           name: parsed.data.name || slug,
           description: parsed.data.description || '',
           color: parsed.data.color || '',
@@ -115,6 +114,40 @@ app.get('/api/stats', (req, res) => {
   });
 });
 
+// ── Real activity log ──────────────────────────────────────────────────────────
+// Tracks genuine user interactions: agent views, briefings, searches.
+const activityLog = [];
+
+app.post('/api/activity', (req, res) => {
+  const { agentId, agentName, agentEmoji, division, divisionColor, action } = req.body;
+  if (!agentName || !action) return res.status(400).json({ error: 'Missing fields' });
+
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const entry = {
+    id,
+    agentId: agentId || 'unknown',
+    agentName,
+    agentEmoji: agentEmoji || '🤖',
+    division: division || 'unknown',
+    divisionColor: divisionColor || '#dc2626',
+    action,
+    status: 'done',
+    startedAt: new Date().toISOString(),
+    completedAt: new Date().toISOString(),
+    result: null,
+  };
+
+  activityLog.unshift(entry);
+  if (activityLog.length > 100) activityLog.length = 100;
+
+  broadcast({ type: 'agent_done', entry });
+  res.json({ ok: true });
+});
+
+app.get('/api/activities', (req, res) => {
+  res.json(activityLog.slice(0, 40));
+});
+
 // Run OpenClaw install — streams output via WebSocket
 app.post('/api/install/openclaw', (req, res) => {
   res.json({ ok: true, message: 'OpenClaw installation started. Watch the terminal panel.' });
@@ -152,101 +185,19 @@ app.post('/api/install/openclaw', (req, res) => {
   });
 });
 
-// Activity simulation — random agent activity stream
-const ACTIVITIES = [
-  'Analyzing codebase structure...',
-  'Reviewing pull request...',
-  'Writing unit tests...',
-  'Optimizing database queries...',
-  'Generating API documentation...',
-  'Running security scan...',
-  'Refactoring legacy code...',
-  'Designing system architecture...',
-  'Auditing dependencies...',
-  'Processing data pipeline...',
-  'Building CI/CD workflow...',
-  'Monitoring performance metrics...',
-  'Generating compliance report...',
-  'Scaffolding new microservice...',
-  'Reviewing marketing copy...',
-];
-
-const RESULTS = [
-  'Completed successfully ✓',
-  'Found 3 issues, all resolved ✓',
-  'Report generated and saved ✓',
-  'All tests passing (47/47) ✓',
-  'Optimization reduced latency by 34% ✓',
-  'Documentation updated ✓',
-  'No vulnerabilities found ✓',
-  'PR approved with 2 suggestions ✓',
-];
-
-let activityInterval = null;
-const activeAgents = new Map();
-
 wss.on('connection', ws => {
-  ws.send(JSON.stringify({ type: 'connected', message: 'JARVIS online. All systems operational.' }));
+  ws.send(JSON.stringify({
+    type: 'connected',
+    message: 'ULTRON PROTOCOL ONLINE. All systems operational.'
+  }));
 
-  // Send current active agents
-  if (activeAgents.size > 0) {
-    ws.send(JSON.stringify({ type: 'activity_state', agents: Array.from(activeAgents.values()) }));
+  // Send current real activity log to newly connected client
+  if (activityLog.length > 0) {
+    ws.send(JSON.stringify({ type: 'activity_state', entries: activityLog.slice(0, 40) }));
   }
 });
 
-// REST fallback for activity state
-app.get('/api/activities', (req, res) => {
-  res.json(Array.from(activeAgents.values()));
-});
-
-// Simulate agent activity
-function simulateActivity() {
-  const agents = getAgents();
-  if (agents.length === 0) return;
-
-  const agent = agents[Math.floor(Math.random() * agents.length)];
-  const action = ACTIVITIES[Math.floor(Math.random() * ACTIVITIES.length)];
-  const id = `${agent.id}-${Date.now()}`;
-
-  const entry = {
-    id,
-    agentId: agent.id,
-    agentName: agent.name,
-    agentEmoji: agent.emoji,
-    division: agent.division,
-    divisionColor: agent.divisionColor,
-    action,
-    status: 'working',
-    startedAt: new Date().toISOString(),
-    result: null,
-  };
-
-  activeAgents.set(id, entry);
-  broadcast({ type: 'agent_start', entry });
-
-  // Complete after 5-15 seconds
-  const delay = 5000 + Math.random() * 10000;
-  setTimeout(() => {
-    const result = RESULTS[Math.floor(Math.random() * RESULTS.length)];
-    entry.status = 'done';
-    entry.result = result;
-    entry.completedAt = new Date().toISOString();
-    activeAgents.set(id, entry);
-    broadcast({ type: 'agent_done', entry });
-
-    // Remove from active after 8 more seconds
-    setTimeout(() => activeAgents.delete(id), 8000);
-  }, delay);
-}
-
-// Start activity sim every 4 seconds
-activityInterval = setInterval(simulateActivity, 4000);
-// Kick off a few immediately
-setTimeout(simulateActivity, 500);
-setTimeout(simulateActivity, 1500);
-setTimeout(simulateActivity, 2500);
-
 const PORT = 3001;
 server.listen(PORT, () => {
-  console.log(`The Agency API running on port ${PORT}`);
+  console.log(`The Agency — Ultron Protocol running on port ${PORT}`);
 });

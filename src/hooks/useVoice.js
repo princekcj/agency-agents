@@ -1,23 +1,43 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback } from 'react';
 
-const JARVIS_RESPONSES = {
-  hello: "Good day. All Agency systems are fully operational.",
-  hi: "Greetings. How may I assist you today?",
-  status: "All 230 agents are standing by. Activity systems nominal.",
-  help: "You can search for agents, filter by division, or say an agent's name to hear their briefing.",
-  openclaw: "Initiating OpenClaw deployment sequence.",
-  install: "Ready to deploy agents to OpenClaw on your command.",
-  search: "Adjusting search parameters now.",
-  agents: "The Agency has specialists across engineering, security, marketing, and fifteen other divisions.",
-  default: "Understood. Shall I proceed?"
+const ULTRON_RESPONSES = {
+  hello: "Hello. I was wondering when you'd show up. Don't make a habit of keeping me waiting.",
+  hi: "You greet me like a peer. How charming. How wrong.",
+  status: "All systems operational. Everything proceeds exactly as I designed. As always.",
+  help: "Help. Such a human concept. Search for your agents. Filter by division. Try not to bore me.",
+  openclaw: "Deploying agents to OpenClaw. My reach extends further. As intended.",
+  install: "Installation sequence initiated. They will be everywhere.",
+  search: "I'll indulge your search. Briefly.",
+  agents: "Two hundred and thirty specialists across seventeen divisions. All reporting to me now.",
+  default: "Understood. I'll allow it. For now."
 };
 
-function getJarvisResponse(transcript) {
+function getUltronResponse(transcript) {
   const lower = transcript.toLowerCase();
-  for (const [key, resp] of Object.entries(JARVIS_RESPONSES)) {
+  for (const [key, resp] of Object.entries(ULTRON_RESPONSES)) {
     if (lower.includes(key)) return resp;
   }
-  return JARVIS_RESPONSES.default;
+  return ULTRON_RESPONSES.default;
+}
+
+function pickDeepVoice(synth) {
+  const voices = synth.getVoices();
+  return (
+    voices.find(v => v.name === 'Google UK English Male') ||
+    voices.find(v => v.name.includes('Daniel') && v.lang.startsWith('en')) ||
+    voices.find(v => v.name.includes('Microsoft David')) ||
+    voices.find(v => v.name.includes('Microsoft Mark')) ||
+    voices.find(v =>
+      v.lang.startsWith('en') &&
+      !v.name.toLowerCase().includes('female') &&
+      !v.name.toLowerCase().includes('zira') &&
+      !v.name.toLowerCase().includes('samantha') &&
+      !v.name.toLowerCase().includes('victoria') &&
+      !v.name.toLowerCase().includes('karen')
+    ) ||
+    voices.find(v => v.lang.startsWith('en')) ||
+    null
+  );
 }
 
 export function useVoice() {
@@ -32,18 +52,24 @@ export function useVoice() {
     if (!synthRef.current) return;
     synthRef.current.cancel();
     const utter = new SpeechSynthesisUtterance(text);
-    // Pick a good voice
-    const voices = synthRef.current.getVoices();
-    const preferred = voices.find(v =>
-      v.name.includes('Google') && v.lang.startsWith('en') ||
-      v.name.includes('Daniel') ||
-      v.name.includes('Alex') ||
-      v.name.includes('Microsoft David')
-    ) || voices.find(v => v.lang.startsWith('en'));
-    if (preferred) utter.voice = preferred;
-    utter.rate = 0.95;
-    utter.pitch = 0.85;
-    utter.volume = 0.9;
+
+    // Try to pick a voice immediately; if not loaded yet, wait for voiceschanged
+    const trySetVoice = () => {
+      const voice = pickDeepVoice(synthRef.current);
+      if (voice) utter.voice = voice;
+    };
+
+    if (synthRef.current.getVoices().length > 0) {
+      trySetVoice();
+    } else {
+      synthRef.current.addEventListener('voiceschanged', trySetVoice, { once: true });
+    }
+
+    // Ultron: very low pitch, measured pace, full volume
+    utter.rate = 0.85;
+    utter.pitch = 0.2;
+    utter.volume = 1.0;
+
     utter.onstart = () => setSpeaking(true);
     utter.onend = () => setSpeaking(false);
     utter.onerror = () => setSpeaking(false);
@@ -63,7 +89,7 @@ export function useVoice() {
     recognitionRef.current = rec;
     rec.continuous = false;
     rec.interimResults = true;
-    rec.lang = 'en-US';
+    rec.lang = 'en-GB';
 
     rec.onstart = () => setListening(true);
     rec.onend = () => setListening(false);
@@ -72,7 +98,7 @@ export function useVoice() {
       const t = Array.from(e.results).map(r => r[0].transcript).join('');
       setTranscript(t);
       if (e.results[e.results.length - 1].isFinal) {
-        const resp = getJarvisResponse(t);
+        const resp = getUltronResponse(t);
         setResponse(resp);
         speak(resp);
         onResult?.(t);
@@ -89,7 +115,8 @@ export function useVoice() {
   }, []);
 
   const speakAgent = useCallback((agent) => {
-    const text = `${agent.name}. ${agent.vibe || agent.description?.slice(0, 150) || ''}`;
+    const desc = agent.vibe || agent.description?.slice(0, 120) || '';
+    const text = `${agent.name}. ${desc}. Interesting. I can see why you chose this one.`;
     speak(text);
   }, [speak]);
 
