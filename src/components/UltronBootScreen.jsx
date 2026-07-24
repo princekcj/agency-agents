@@ -148,6 +148,14 @@ export default function UltronBootScreen({ stats, speak, onDone, dataReady }) {
     timers.current.push(fallback);
   };
 
+  // Auto-start the greeting as soon as data is ready — no click required
+  useEffect(() => {
+    if (dataReady && phase === 'init') {
+      startBoot();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataReady]);
+
   useEffect(() => {
     return () => timers.current.forEach(clearTimeout);
   }, []);
