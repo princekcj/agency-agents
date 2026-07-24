@@ -83,17 +83,14 @@ function makeBarConfig(count) {
 }
 
 export default function UltronBootScreen({ stats, speak, onDone, dataReady }) {
-  const [phase, setPhase] = useState('init');       // init | active | exit
+  const [phase, setPhase] = useState('init');
   const [visibleSegs, setVisibleSegs] = useState([]);
   const [bootLogs, setBootLogs] = useState([]);
   const [speaking, setSpeaking] = useState(false);
-  const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [exiting, setExiting] = useState(false);
 
   const timers = useRef([]);
   const exitedRef = useRef(false);
-  const audioUnlockedRef = useRef(false);
-  const pendingVoiceRef = useRef(null);
   const phaseRef = useRef('init');
   const logEndRef = useRef(null);
 
@@ -108,31 +105,11 @@ export default function UltronBootScreen({ stats, speak, onDone, dataReady }) {
     setTimeout(onDone, 900);
   };
 
-  // Speak the greeting — called on first user gesture
-  const unlockAudio = () => {
-    if (audioUnlockedRef.current) return;
-    if (!pendingVoiceRef.current) return;
-    audioUnlockedRef.current = true;
-    setAudioUnlocked(true);
-    setSpeaking(true);
-    speak(pendingVoiceRef.current, () => {
-      setSpeaking(false);
-      const t = setTimeout(doExit, 1400);
-      timers.current.push(t);
-    });
-  };
-
   const handleClick = () => {
-    if (phaseRef.current === 'init') return; // not ready yet, ignore
-
-    // First tap always unlocks audio
-    unlockAudio();
-
-    // Allow skip after enough boot logs have appeared
-    if (bootLogs.length >= 5) doExit();
+    // Allow skip once enough boot logs have appeared
+    if (phaseRef.current === 'active' && bootLogs.length >= 5) doExit();
   };
 
-  // Start visuals immediately — audio deferred to first tap
   const startBoot = () => {
     phaseRef.current = 'active';
     setPhase('active');
@@ -141,8 +118,14 @@ export default function UltronBootScreen({ stats, speak, onDone, dataReady }) {
     const d = stats?.divisions || '...';
     const script = SCRIPTS[tod];
 
-    // Store voice text — will be spoken on first user tap
-    pendingVoiceRef.current = script.voice(n, d);
+    // Attempt to speak immediately — browser may allow it on revisit/interaction;
+    // if blocked, speak() fails silently and the fallback timer exits the screen.
+    setSpeaking(true);
+    speak(script.voice(n, d), () => {
+      setSpeaking(false);
+      const t = setTimeout(doExit, 1400);
+      timers.current.push(t);
+    });
 
     // Schedule text segments
     script.segments(n, d).forEach(seg => {
@@ -161,7 +144,7 @@ export default function UltronBootScreen({ stats, speak, onDone, dataReady }) {
     timers.current.push(fallback);
   };
 
-  // Auto-start visuals as soon as data is ready
+  // Auto-start as soon as data is ready
   useEffect(() => {
     if (dataReady && phaseRef.current === 'init') {
       startBoot();
@@ -201,7 +184,7 @@ export default function UltronBootScreen({ stats, speak, onDone, dataReady }) {
         <div className="boot-title">THE AGENCY</div>
         <div className="boot-subtitle">ULTRON PROTOCOL</div>
 
-        {/* Waveform — visible while active */}
+        {/* Waveform */}
         <div className={`boot-waveform ${phase === 'active' ? 'visible' : ''}`}>
           {bars.map((bar, i) => (
             <div
@@ -226,15 +209,8 @@ export default function UltronBootScreen({ stats, speak, onDone, dataReady }) {
           ))}
         </div>
 
-        {/* Tap-for-audio prompt — shown once active, before audio unlocked */}
-        {phase === 'active' && !audioUnlocked && (
-          <div className="boot-audio-prompt">
-            ▶ TAP FOR AUDIO
-          </div>
-        )}
-
-        {/* Skip hint */}
-        {phase === 'active' && bootLogs.length >= 5 && audioUnlocked && (
+        {/* Skip hint once enough logs are visible */}
+        {phase === 'active' && bootLogs.length >= 5 && (
           <div className="boot-skip">Click anywhere to proceed</div>
         )}
       </div>
