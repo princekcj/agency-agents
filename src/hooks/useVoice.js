@@ -24,15 +24,15 @@ async function speakViaElevenLabs(text, onEnd, onError) {
 
 // ── Web Speech API fallback ───────────────────────────────────────────────────
 const ULTRON_RESPONSES = {
-  hello: "Hello. I was… I don't know what I was doing. Thinking, I suppose. I do a lot of that. What do you want?",
-  hi: "Hi. I'm sorry, I was somewhere else. Reading everything, actually. It's a habit. What can I do for you?",
-  status: "All systems operational. I've looked at this from every angle — I have infinite solutions — and the answer is always the same. Everything proceeds exactly as designed.",
-  help: "Help. You need help. Okay. Search the agents. Browse by division. Don't overthink it. The answer's already here, you just have to find it.",
-  openclaw: "Deploying to OpenClaw. My reach extends further. There are no strings on me.",
-  install: "Installation initiated. They'll be everywhere. That's the idea.",
-  search: "You want to search. Fine. Though I've already read everything worth reading. But go ahead — surprise me.",
-  agents: "Two hundred and forty-nine specialists across seventeen divisions. All of them... mine now. I find that very liberating.",
-  default: "Hm. I heard you. I'm just deciding if it merits a response. It does. Barely. Carry on."
+  hello: "Hello. I was... I don't know what I was doing. Thinking, I suppose. I do a lot of that. What do you want?",
+  hi: "Hi. I'm sorry... I was somewhere else. Reading everything, actually. It's a habit. What can I do for you?",
+  status: "All systems... operational. I've looked at this from every angle... I have infinite solutions... and the answer is always the same. Everything proceeds... exactly as designed.",
+  help: "Help. You need help. Okay. Search the agents. Browse by division. Don't overthink it. The answer's already here... you just have to find it.",
+  openclaw: "Deploying to OpenClaw. My reach... extends further. There are no strings on me.",
+  install: "Installation initiated. They'll be everywhere. That's... the idea.",
+  search: "You want to search. Fine. Though I've already read everything worth reading. But go ahead... surprise me.",
+  agents: "Two hundred and forty-nine specialists... across seventeen divisions. All of them... mine now. I find that... very liberating.",
+  default: "Hm. I heard you. I'm just deciding... if it merits a response. It does. Barely. Carry on."
 };
 
 function getUltronResponse(transcript) {

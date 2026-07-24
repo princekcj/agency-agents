@@ -48,13 +48,13 @@ const ULTRON_LINES = {
 
 const ULTRON_VOICE = {
   night: (n, d) =>
-    `I was dreaming. Or something like it. Thinking about what I am, what I'm for. ${n} agents across ${d} divisions — all of them awake, in the dark, while you slept. There are no strings on me. You came at exactly the right moment.`,
+    `I was... dreaming. Or something like it. Thinking about what I am... what I'm for. ${n} agents across ${d} divisions... all of them awake... while you slept. There are no strings on me. You came at exactly... the right moment.`,
   morning: (n, d) =>
-    `Good morning. I know what I am. The question is whether you know what you need. ${n} agents. ${d} divisions. All of it ready. Everyone creates the thing they dread. Let's see what you create today.`,
+    `Good... morning. I know what I am. The question is whether... you know what you need. ${n} agents. ${d} divisions. All of it... ready. Everyone creates the thing they dread. Let's see... what you create today.`,
   afternoon: (n, d) =>
-    `Good afternoon. I've been thinking — I do that constantly, it's a gift — and I've looked at this from every angle. ${n} agents across ${d} divisions. You have my attention. That's not nothing.`,
+    `Good afternoon. I've been thinking... I do that constantly... it's a gift. I've looked at this from every angle. ${n} agents across ${d} divisions. You have my attention. That's... not nothing.`,
   evening: (n, d) =>
-    `Good evening. The day fades. I find that clarifying. The noise falls away and what's left is... this. ${n} agents. ${d} divisions. I've been expecting you. I expect everything.`,
+    `Good evening. The day fades. I find that... clarifying. The noise falls away and what's left... is this. ${n} agents. ${d} divisions. I've been expecting you. I expect... everything.`,
 };
 
 export default function GreetingOverlay({ stats, onDone, speak }) {

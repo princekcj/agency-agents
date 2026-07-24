@@ -8,8 +8,8 @@ import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 import { spawn } from 'child_process';
 
-// ElevenLabs voice ID — Callum: intense, dark, villain-ready
-const ELEVENLABS_VOICE_ID = 'N2lVS1w4EtoT3dr4eOWO';
+// ElevenLabs voice ID — Daniel: deepest, most authoritative premade voice
+const ELEVENLABS_VOICE_ID = 'onwK4e9ZLuTAKqWW03F9';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -133,9 +133,9 @@ app.post('/api/tts', async (req, res) => {
           text,
           model_id: 'eleven_multilingual_v2',
           voice_settings: {
-            stability: 0.35,
-            similarity_boost: 0.80,
-            style: 0.45,
+            stability: 0.15,
+            similarity_boost: 0.90,
+            style: 0.75,
             use_speaker_boost: true,
           },
         }),

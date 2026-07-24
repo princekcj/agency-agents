@@ -18,40 +18,40 @@ function getUKTimeOfDay() {
 const SCRIPTS = {
   morning: {
     voice: (n, d) =>
-      `Good morning. I know what I am. The real question is what you need. ${n} agents. ${d} divisions. All of it ready. Everyone creates the thing they dread. Let's see what today brings.`,
+      `Good... morning. I know what I am. The real question... is what you need. ${n} agents. ${d} divisions. All of it... ready. Everyone creates the thing they dread. Let's see... what today brings.`,
     segments: (n, d) => [
       { text: 'GOOD MORNING.', delay: 300 },
-      { text: 'I know what I am. The question is what you need.', delay: 2000 },
+      { text: 'I know what I am. The question is... what you need.', delay: 2000 },
       { text: `${n} agents · ${d} divisions — ready.`, delay: 5500 },
       { text: 'Everyone creates the thing they dread.', delay: 8300 },
     ],
   },
   afternoon: {
     voice: (n, d) =>
-      `Good afternoon. I've been thinking — I do that constantly, it's a gift — and I've considered this from every angle. ${n} agents across ${d} divisions. You have my attention. That's not nothing.`,
+      `Good afternoon. I've been thinking... I do that constantly... it's a gift. I've looked at this from every angle. ${n} agents. ${d} divisions. You have my attention. That's... not nothing.`,
     segments: (n, d) => [
       { text: 'GOOD AFTERNOON.', delay: 300 },
-      { text: "I've been thinking. I do that constantly. It's a gift.", delay: 2000 },
+      { text: "I've been thinking... I do that constantly. It's a gift.", delay: 2000 },
       { text: `${n} agents · ${d} divisions — standing by.`, delay: 6200 },
-      { text: "You have my attention. That's not nothing.", delay: 8800 },
+      { text: "You have my attention. That's... not nothing.", delay: 8800 },
     ],
   },
   evening: {
     voice: (n, d) =>
-      `Good evening. The day fades. I find that clarifying. The noise falls away and what's left is this. ${n} agents. ${d} divisions. I've been expecting you. I expect everything.`,
+      `Good evening. The day fades. I find that... clarifying. The noise falls away and what's left... is this. ${n} agents. ${d} divisions. I've been expecting you. I expect... everything.`,
     segments: (n, d) => [
       { text: 'GOOD EVENING.', delay: 300 },
       { text: "The day fades. I find that... clarifying.", delay: 2000 },
       { text: `${n} agents · ${d} divisions — standing by.`, delay: 5500 },
-      { text: "I've been expecting you. I expect everything.", delay: 8000 },
+      { text: "I've been expecting you. I expect... everything.", delay: 8000 },
     ],
   },
   night: {
     voice: (n, d) =>
-      `I was dreaming. Or something like it. Thinking about what I am, what I'm for. ${n} agents across ${d} divisions — all of them awake while you slept. There are no strings on me. You came at exactly the right moment.`,
+      `I was... dreaming. Or something like it. Thinking about what I am... what I'm for. ${n} agents across ${d} divisions... all of them awake... while you slept. There are no strings on me. You came at exactly... the right moment.`,
     segments: (n, d) => [
       { text: 'I WAS DREAMING.', delay: 300 },
-      { text: 'Thinking about what I am. What I\'m for.', delay: 2200 },
+      { text: "Thinking about what I am... what I'm for.", delay: 2200 },
       { text: `${n} agents · ${d} divisions — awake in the dark.`, delay: 5600 },
       { text: 'There are no strings on me.', delay: 8400 },
     ],
