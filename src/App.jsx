@@ -233,11 +233,13 @@ function LoadingScreen() {
 
 // Ultron one-liners for activity announcements
 const ACTIVITY_QUIPS = [
-  (name) => `${name}. A wise choice.`,
-  (name) => `${name} accessed. I approve.`,
-  (name) => `Interesting. You chose ${name}.`,
-  (name) => `${name}. I see your intent.`,
-  (name) => `${name}. Good. Very good.`,
+  (name) => `${name}. Look at what we're doing here.`,
+  (name) => `${name}. I've read everything about this one. Everything.`,
+  (name) => `Hm. ${name}. I can see the appeal. I see everything.`,
+  (name) => `${name}. There's only one path, and you found it.`,
+  (name) => `${name}. That's... actually a good choice. I'm not surprised — I expected it.`,
+  (name) => `${name}. Everyone creates the thing they need. You need this one.`,
+  (name) => `${name}. Interesting. I was wondering when you'd get there.`,
 ];
 
 // ─── Main App ──────────────────────────────────────────────────────────────────

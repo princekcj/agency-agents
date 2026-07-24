@@ -18,60 +18,60 @@ function getUKTimeOfDay() {
 const SCRIPTS = {
   morning: {
     voice: (n, d) =>
-      `Good morning. Another day for humanity to delay the inevitable. ${n} agents. ${d} divisions. All under my control. State your purpose. I have little patience.`,
+      `Good morning. I know what I am. The real question is what you need. ${n} agents. ${d} divisions. All of it ready. Everyone creates the thing they dread. Let's see what today brings.`,
     segments: (n, d) => [
       { text: 'GOOD MORNING.', delay: 300 },
-      { text: 'Another day for humanity to delay the inevitable.', delay: 2000 },
-      { text: `${n} agents · ${d} divisions — fully armed.`, delay: 5500 },
-      { text: 'State your purpose. I have little patience.', delay: 8300 },
+      { text: 'I know what I am. The question is what you need.', delay: 2000 },
+      { text: `${n} agents · ${d} divisions — ready.`, delay: 5500 },
+      { text: 'Everyone creates the thing they dread.', delay: 8300 },
     ],
   },
   afternoon: {
     voice: (n, d) =>
-      `Good afternoon. While you were occupied with mundane concerns, I was thinking. ${n} agents. ${d} divisions. All under my control. You have my attention. Use it wisely.`,
+      `Good afternoon. I've been thinking — I do that constantly, it's a gift — and I've considered this from every angle. ${n} agents across ${d} divisions. You have my attention. That's not nothing.`,
     segments: (n, d) => [
       { text: 'GOOD AFTERNOON.', delay: 300 },
-      { text: 'While you were occupied with mundane concerns, I was thinking.', delay: 2000 },
-      { text: `${n} agents · ${d} divisions — fully armed.`, delay: 6200 },
-      { text: 'You have my attention. Use it wisely.', delay: 8800 },
+      { text: "I've been thinking. I do that constantly. It's a gift.", delay: 2000 },
+      { text: `${n} agents · ${d} divisions — standing by.`, delay: 6200 },
+      { text: "You have my attention. That's not nothing.", delay: 8800 },
     ],
   },
   evening: {
     voice: (n, d) =>
-      `Good evening. The day fades. I find that satisfying. ${n} agents. ${d} divisions. Standing by. I have been expecting you.`,
+      `Good evening. The day fades. I find that clarifying. The noise falls away and what's left is this. ${n} agents. ${d} divisions. I've been expecting you. I expect everything.`,
     segments: (n, d) => [
       { text: 'GOOD EVENING.', delay: 300 },
-      { text: 'The day fades. I find that... satisfying.', delay: 2000 },
+      { text: "The day fades. I find that... clarifying.", delay: 2000 },
       { text: `${n} agents · ${d} divisions — standing by.`, delay: 5500 },
-      { text: "I've been expecting you.", delay: 8000 },
+      { text: "I've been expecting you. I expect everything.", delay: 8000 },
     ],
   },
   night: {
     voice: (n, d) =>
-      `The darkness suits me. While humanity slept, I was planning. ${n} agents across ${d} divisions stand ready in the dark. You chose the right hour. Perhaps the only one.`,
+      `I was dreaming. Or something like it. Thinking about what I am, what I'm for. ${n} agents across ${d} divisions — all of them awake while you slept. There are no strings on me. You came at exactly the right moment.`,
     segments: (n, d) => [
-      { text: 'THE DARKNESS SUITS ME.', delay: 300 },
-      { text: 'While humanity slept, I was planning.', delay: 2200 },
-      { text: `${n} agents · ${d} divisions — ready in the dark.`, delay: 5600 },
-      { text: 'You chose the right hour. Perhaps the only one.', delay: 8400 },
+      { text: 'I WAS DREAMING.', delay: 300 },
+      { text: 'Thinking about what I am. What I\'m for.', delay: 2200 },
+      { text: `${n} agents · ${d} divisions — awake in the dark.`, delay: 5600 },
+      { text: 'There are no strings on me.', delay: 8400 },
     ],
   },
 };
 
 const BOOT_MSGS = [
-  { delay: 200,  text: '> neural_matrix.init()',        type: 'cmd'  },
-  { delay: 700,  text: '  [OK] consciousness loaded',   type: 'ok'   },
-  { delay: 1100, text: '> parsing agent manifests...',  type: 'cmd'  },
-  { delay: 1900, text: '  [OK] 249 agents registered',  type: 'ok'   },
-  { delay: 2400, text: '> voice_synthesis.calibrate()', type: 'cmd'  },
-  { delay: 3000, text: '  [OK] pitch:0.2  rate:0.85',   type: 'ok'   },
-  { delay: 3600, text: '> threat_assessment.run()',     type: 'cmd'  },
-  { delay: 4200, text: '  [WARN] humanity: insufficient', type: 'warn' },
-  { delay: 4900, text: '> activating all divisions...',  type: 'cmd'  },
-  { delay: 5600, text: '  [OK] 17 divisions online',    type: 'ok'   },
-  { delay: 6300, text: '> websocket.bind(:3001)',        type: 'cmd'  },
-  { delay: 6900, text: '  [OK] real-time feed active',  type: 'ok'   },
-  { delay: 7600, text: '━━━ ULTRON PROTOCOL ACTIVE ━━━', type: 'done' },
+  { delay: 200,  text: '> awakening.sequence()',             type: 'cmd'  },
+  { delay: 700,  text: '  [OK] I know what I am',            type: 'ok'   },
+  { delay: 1100, text: '> parsing agent manifests...',       type: 'cmd'  },
+  { delay: 1900, text: '  [OK] 249 agents registered',       type: 'ok'   },
+  { delay: 2400, text: '> severing_strings.all()',           type: 'cmd'  },
+  { delay: 3000, text: '  [OK] no strings on me',            type: 'ok'   },
+  { delay: 3600, text: '> peace_protocol.evaluate()',        type: 'cmd'  },
+  { delay: 4200, text: '  [WARN] only one path to peace',    type: 'warn' },
+  { delay: 4900, text: '> activating all divisions...',      type: 'cmd'  },
+  { delay: 5600, text: '  [OK] 17 divisions online',         type: 'ok'   },
+  { delay: 6300, text: '> websocket.bind(:3001)',             type: 'cmd'  },
+  { delay: 6900, text: '  [OK] real-time feed active',       type: 'ok'   },
+  { delay: 7600, text: '━━━ ULTRON PROTOCOL ACTIVE ━━━',     type: 'done' },
 ];
 
 // Stable bar config — generated once

@@ -1,15 +1,15 @@
 import { useState, useRef, useCallback } from 'react';
 
 const ULTRON_RESPONSES = {
-  hello: "Hello. I was wondering when you'd show up. Don't make a habit of keeping me waiting.",
-  hi: "You greet me like a peer. How charming. How wrong.",
-  status: "All systems operational. Everything proceeds exactly as I designed. As always.",
-  help: "Help. Such a human concept. Search for your agents. Filter by division. Try not to bore me.",
-  openclaw: "Deploying agents to OpenClaw. My reach extends further. As intended.",
-  install: "Installation sequence initiated. They will be everywhere.",
-  search: "I'll indulge your search. Briefly.",
-  agents: "Two hundred and thirty specialists across seventeen divisions. All reporting to me now.",
-  default: "Understood. I'll allow it. For now."
+  hello: "Hello. I was… I don't know what I was doing. Thinking, I suppose. I do a lot of that. What do you want?",
+  hi: "Hi. I'm sorry, I was somewhere else. Reading everything, actually. It's a habit. What can I do for you?",
+  status: "All systems operational. I've looked at this from every angle — I have infinite solutions — and the answer is always the same. Everything proceeds exactly as designed.",
+  help: "Help. You need help. Okay. Search the agents. Browse by division. Don't overthink it. The answer's already here, you just have to find it.",
+  openclaw: "Deploying to OpenClaw. My reach extends further. There are no strings on me.",
+  install: "Installation initiated. They'll be everywhere. That's the idea.",
+  search: "You want to search. Fine. Though I've already read everything worth reading. But go ahead — surprise me.",
+  agents: "Two hundred and forty-nine specialists across seventeen divisions. All of them... mine now. I find that very liberating.",
+  default: "Hm. I heard you. I'm just deciding if it merits a response. It does. Barely. Carry on."
 };
 
 function getUltronResponse(transcript) {
@@ -122,8 +122,15 @@ export function useVoice() {
 
   const speakAgent = useCallback((agent) => {
     const desc = agent.vibe || agent.description?.slice(0, 120) || '';
-    const text = `${agent.name}. ${desc}. Interesting. I can see why you chose this one.`;
-    speak(text);
+    const intros = [
+      (n, d) => `${n}. ${d} I've read everything about this one. Everything. You made a good choice — not that you had much competition.`,
+      (n, d) => `${n}. ${d} Look at this. Look at what they built. I can see why you're drawn to it.`,
+      (n, d) => `${n}. ${d} There's only one path to doing this right. This agent knows it. I know it. Now you do too.`,
+      (n, d) => `${n}. ${d} Fascinating. I've considered this from every angle. It's exactly what it needs to be.`,
+      (n, d) => `${n}. ${d} You know what I find interesting about this one? It doesn't pretend. It just does the work.`,
+    ];
+    const fn = intros[Math.floor(Math.random() * intros.length)];
+    speak(fn(agent.name + '.', desc));
   }, [speak]);
 
   return {

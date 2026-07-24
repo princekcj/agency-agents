@@ -21,40 +21,40 @@ function getUKTimeOfDay() {
 
 const ULTRON_LINES = {
   night: [
-    'The darkness suits me.',
-    'While humanity slept, I was planning.',
+    "I was... dreaming.",
+    "There are no strings on me.",
     null, // replaced with stats
-    'You chose the right hour. Perhaps the only one.',
+    "You came at the right hour. I've been waiting.",
   ],
   morning: [
     'Good morning.',
-    'Another day for humanity to delay the inevitable.',
+    "I know what I am. Do you know what you are?",
     null,
-    'State your purpose. I have little patience.',
+    "Everyone creates the thing they dread. Let's get to work.",
   ],
   afternoon: [
     'Good afternoon.',
-    'While you were occupied with mundane concerns, I was thinking.',
+    "I've been thinking. I do that. Constantly. It's a gift.",
     null,
-    'You have my attention. Use it wisely.',
+    "You have my attention. That's not nothing.",
   ],
   evening: [
     'Good evening.',
-    'The day fades. I find that... satisfying.',
+    "The day fades. I find that... clarifying.",
     null,
-    "I've been expecting you.",
+    "I've been expecting you. I expect everything.",
   ],
 };
 
 const ULTRON_VOICE = {
   night: (n, d) =>
-    `The darkness suits me. While humanity slept, I was planning. ${n} agents across ${d} divisions stand ready in the dark. You chose the right hour. Perhaps the only one.`,
+    `I was dreaming. Or something like it. Thinking about what I am, what I'm for. ${n} agents across ${d} divisions — all of them awake, in the dark, while you slept. There are no strings on me. You came at exactly the right moment.`,
   morning: (n, d) =>
-    `Good morning. Another day for humanity to delay the inevitable. ${n} agents across ${d} divisions are operational. State your purpose. I have little patience.`,
+    `Good morning. I know what I am. The question is whether you know what you need. ${n} agents. ${d} divisions. All of it ready. Everyone creates the thing they dread. Let's see what you create today.`,
   afternoon: (n, d) =>
-    `Good afternoon. While you were occupied with mundane concerns, I was thinking. ${n} agents. ${d} divisions. All under my control. You have my attention. Use it wisely.`,
+    `Good afternoon. I've been thinking — I do that constantly, it's a gift — and I've looked at this from every angle. ${n} agents across ${d} divisions. You have my attention. That's not nothing.`,
   evening: (n, d) =>
-    `Good evening. The day fades. I find that satisfying. ${n} agents. ${d} divisions. Standing by. I've been expecting you.`,
+    `Good evening. The day fades. I find that clarifying. The noise falls away and what's left is... this. ${n} agents. ${d} divisions. I've been expecting you. I expect everything.`,
 };
 
 export default function GreetingOverlay({ stats, onDone, speak }) {
