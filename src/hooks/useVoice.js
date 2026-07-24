@@ -1,5 +1,28 @@
 import { useState, useRef, useCallback } from 'react';
 
+// ── ElevenLabs via server proxy ───────────────────────────────────────────────
+// Returns an Audio element playing the TTS audio, or null if unavailable.
+async function speakViaElevenLabs(text, onEnd, onError) {
+  try {
+    const res = await fetch('/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) throw new Error(`TTS ${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.onended = () => { URL.revokeObjectURL(url); onEnd?.(); };
+    audio.onerror = () => { URL.revokeObjectURL(url); onError?.(); };
+    await audio.play();
+    return audio;
+  } catch {
+    return null;
+  }
+}
+
+// ── Web Speech API fallback ───────────────────────────────────────────────────
 const ULTRON_RESPONSES = {
   hello: "Hello. I was… I don't know what I was doing. Thinking, I suppose. I do a lot of that. What do you want?",
   hi: "Hi. I'm sorry, I was somewhere else. Reading everything, actually. It's a habit. What can I do for you?",
@@ -40,52 +63,97 @@ function pickDeepVoice(synth) {
   );
 }
 
+function speakViaBrowser(synth, text, onEnd) {
+  const utter = new SpeechSynthesisUtterance(text);
+
+  const applyVoice = () => {
+    const voice = pickDeepVoice(synth);
+    if (voice) utter.voice = voice;
+  };
+
+  // Apply immediately if voices are loaded; otherwise wait for the event
+  if (synth.getVoices().length > 0) {
+    applyVoice();
+  } else {
+    synth.addEventListener('voiceschanged', applyVoice, { once: true });
+  }
+
+  // pitch 0.45 is the practical floor on iOS Safari while still sounding deep
+  utter.rate = 0.82;
+  utter.pitch = 0.45;
+  utter.volume = 1.0;
+
+  utter.onend = () => onEnd?.();
+  utter.onerror = () => onEnd?.();
+
+  synth.speak(utter);
+  return utter;
+}
+
+// ── Hook ──────────────────────────────────────────────────────────────────────
 export function useVoice() {
   const [speaking, setSpeaking] = useState(false);
   const [listening, setListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [response, setResponse] = useState('');
-  const synthRef = useRef(window.speechSynthesis);
+  const synthRef = useRef(typeof window !== 'undefined' ? window.speechSynthesis : null);
   const recognitionRef = useRef(null);
+  const currentAudioRef = useRef(null); // for ElevenLabs Audio element
 
-  // speak(text, onEnd?) — onEnd called when utterance finishes
-  const speak = useCallback((text, onEnd) => {
-    if (!synthRef.current) return null;
-    synthRef.current.cancel();
-    const utter = new SpeechSynthesisUtterance(text);
-
-    const trySetVoice = () => {
-      const voice = pickDeepVoice(synthRef.current);
-      if (voice) utter.voice = voice;
-    };
-
-    if (synthRef.current.getVoices().length > 0) {
-      trySetVoice();
-    } else {
-      synthRef.current.addEventListener('voiceschanged', trySetVoice, { once: true });
-    }
-
-    utter.rate = 0.85;
-    utter.pitch = 0.2;
-    utter.volume = 1.0;
-
-    utter.onstart = () => setSpeaking(true);
-    utter.onend = () => {
-      setSpeaking(false);
-      onEnd?.();
-    };
-    utter.onerror = () => {
-      setSpeaking(false);
-      onEnd?.();
-    };
-
-    synthRef.current.speak(utter);
-    return utter;
-  }, []);
+  // Pre-warm voices so they're ready for the first click
+  if (synthRef.current && synthRef.current.getVoices().length === 0) {
+    synthRef.current.getVoices();
+  }
 
   const stopSpeaking = useCallback(() => {
+    // Stop ElevenLabs audio if playing
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
+    // Stop browser TTS
     synthRef.current?.cancel();
     setSpeaking(false);
+  }, []);
+
+  // speak(text, onEnd?) — tries ElevenLabs first, falls back to browser TTS
+  const speak = useCallback((text, onEnd) => {
+    if (!text) return;
+
+    // Stop anything currently playing
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
+    if (synthRef.current?.speaking) {
+      synthRef.current.cancel();
+    }
+
+    setSpeaking(true);
+
+    const handleDone = () => {
+      setSpeaking(false);
+      onEnd?.();
+    };
+
+    const handleFallback = () => {
+      // ElevenLabs failed — fall back to browser TTS
+      if (synthRef.current) {
+        speakViaBrowser(synthRef.current, text, handleDone);
+      } else {
+        handleDone();
+      }
+    };
+
+    // Try ElevenLabs; fall back if unavailable
+    speakViaElevenLabs(text, handleDone, handleFallback).then(audio => {
+      if (!audio) {
+        // API not configured — go straight to browser TTS
+        handleFallback();
+      } else {
+        currentAudioRef.current = audio;
+      }
+    });
   }, []);
 
   const startListening = useCallback((onResult) => {
@@ -136,7 +204,7 @@ export function useVoice() {
   return {
     speaking, listening, transcript, response,
     speak, stopSpeaking, startListening, stopListening, speakAgent,
-    supported: !!window.speechSynthesis,
-    recognitionSupported: !!(window.SpeechRecognition || window.webkitSpeechRecognition),
+    supported: typeof window !== 'undefined' && (!!window.speechSynthesis || true),
+    recognitionSupported: typeof window !== 'undefined' && !!(window.SpeechRecognition || window.webkitSpeechRecognition),
   };
 }

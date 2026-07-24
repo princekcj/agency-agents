@@ -8,6 +8,9 @@ import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 import { spawn } from 'child_process';
 
+// ElevenLabs voice ID — Callum: intense, dark, villain-ready
+const ELEVENLABS_VOICE_ID = 'N2lVS1w4EtoT3dr4eOWO';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const server = createServer(app);
@@ -112,6 +115,44 @@ app.get('/api/stats', (req, res) => {
     total: agents.length,
     divisions: Object.keys(DIVISIONS).length,
   });
+});
+
+// ── ElevenLabs TTS proxy ───────────────────────────────────────────────────────
+app.post('/api/tts', async (req, res) => {
+  const { text } = req.body;
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: 'No ElevenLabs API key configured' });
+
+  try {
+    const response = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`,
+      {
+        method: 'POST',
+        headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text,
+          model_id: 'eleven_monolingual_v1',
+          voice_settings: {
+            stability: 0.35,
+            similarity_boost: 0.80,
+            style: 0.45,
+            use_speaker_boost: true,
+          },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const err = await response.text();
+      return res.status(500).json({ error: err });
+    }
+
+    res.setHeader('Content-Type', 'audio/mpeg');
+    const buf = await response.arrayBuffer();
+    res.send(Buffer.from(buf));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ── Real activity log ──────────────────────────────────────────────────────────
