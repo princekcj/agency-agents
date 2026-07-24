@@ -48,12 +48,12 @@ export function useVoice() {
   const synthRef = useRef(window.speechSynthesis);
   const recognitionRef = useRef(null);
 
-  const speak = useCallback((text) => {
-    if (!synthRef.current) return;
+  // speak(text, onEnd?) — onEnd called when utterance finishes
+  const speak = useCallback((text, onEnd) => {
+    if (!synthRef.current) return null;
     synthRef.current.cancel();
     const utter = new SpeechSynthesisUtterance(text);
 
-    // Try to pick a voice immediately; if not loaded yet, wait for voiceschanged
     const trySetVoice = () => {
       const voice = pickDeepVoice(synthRef.current);
       if (voice) utter.voice = voice;
@@ -65,14 +65,20 @@ export function useVoice() {
       synthRef.current.addEventListener('voiceschanged', trySetVoice, { once: true });
     }
 
-    // Ultron: very low pitch, measured pace, full volume
     utter.rate = 0.85;
     utter.pitch = 0.2;
     utter.volume = 1.0;
 
     utter.onstart = () => setSpeaking(true);
-    utter.onend = () => setSpeaking(false);
-    utter.onerror = () => setSpeaking(false);
+    utter.onend = () => {
+      setSpeaking(false);
+      onEnd?.();
+    };
+    utter.onerror = () => {
+      setSpeaking(false);
+      onEnd?.();
+    };
+
     synthRef.current.speak(utter);
     return utter;
   }, []);

@@ -16,9 +16,10 @@ The workflow runs `npm run dev` which starts both servers concurrently:
 
 ## Features
 
+- **Ultron Boot Screen** — full-screen cinematic entry: click to initialize triggers Web Speech API (satisfies browser gesture requirement), Ultron speaks the time-of-day greeting while animated waveform bars pulse, text lines reveal in sync, and a boot log scrolls terminal-style. Fades to the command center when speech ends.
 - **Browse & Search** — all 249 agents by division, name, description, or vibe
-- **Ultron Voice Interface** — Web Speech API TTS with deep menacing Ultron persona; UK timezone-aware greeting on load
-- **Real Activity Feed** — tracks genuine user interactions (agent views, briefings) via POST `/api/activity` → broadcast to all WS clients
+- **Ultron Voice Interface** — Web Speech API TTS with deep menacing Ultron persona; UK timezone-aware greeting on boot; short one-liners on agent open/brief/activity updates
+- **Real Activity Feed** — tracks genuine user interactions (agent views, briefings) via POST `/api/activity` → broadcast to all WS clients; Ultron voices new activities post-boot
 - **Agent Detail View** — full markdown content for any agent
 - **OpenClaw Deployment** — run `scripts/convert.sh` + `scripts/install.sh --tool openclaw` with live terminal output streamed via WebSocket
 

@@ -3,7 +3,7 @@ import { Search, Mic, MicOff, Volume2, VolumeX, Activity, Download, X, Eye } fro
 import { useWebSocket } from './hooks/useWebSocket.js';
 import { useVoice } from './hooks/useVoice.js';
 import JarvisBackground from './components/JarvisBackground.jsx';
-import GreetingOverlay from './components/GreetingOverlay.jsx';
+import UltronBootScreen from './components/UltronBootScreen.jsx';
 
 // ─── Minimal Markdown Renderer ────────────────────────────────────────────────
 function SimpleMarkdown({ content }) {
@@ -231,10 +231,19 @@ function LoadingScreen() {
   );
 }
 
+// Ultron one-liners for activity announcements
+const ACTIVITY_QUIPS = [
+  (name) => `${name}. A wise choice.`,
+  (name) => `${name} accessed. I approve.`,
+  (name) => `Interesting. You chose ${name}.`,
+  (name) => `${name}. I see your intent.`,
+  (name) => `${name}. Good. Very good.`,
+];
+
 // ─── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
-  const [loading, setLoading] = useState(true);
-  const [greeting, setGreeting] = useState(false);
+  const [bootDone, setBootDone] = useState(false);
+  const [dataReady, setDataReady] = useState(false);
   const [agents, setAgents] = useState([]);
   const [divisions, setDivisions] = useState([]);
   const [stats, setStats] = useState({ total: 0, divisions: 0 });
@@ -246,8 +255,12 @@ export default function App() {
   const [termLogs, setTermLogs] = useState([]);
   const [installing, setInstalling] = useState(false);
   const [showVoice, setShowVoice] = useState(false);
+  const lastSpokenActivity = useRef(null);
+  const bootDoneRef = useRef(false);
+  const voiceRef = useRef(null);
 
   const voice = useVoice();
+  voiceRef.current = voice;
 
   const [videoBg, setVideoBg] = useState(null);
   useEffect(() => {
@@ -275,7 +288,6 @@ export default function App() {
   }, []);
 
   const { connected } = useWebSocket(useCallback((msg) => {
-    // Load initial activity state when WS connects
     if (msg.type === 'activity_state') {
       setActivities(msg.entries || []);
     }
@@ -285,6 +297,14 @@ export default function App() {
         if (exists) return prev.map(a => a.id === msg.entry.id ? msg.entry : a);
         return [msg.entry, ...prev].slice(0, 40);
       });
+      // Only announce after boot, and only for new unique events
+      if (bootDoneRef.current && msg.entry?.id !== lastSpokenActivity.current) {
+        lastSpokenActivity.current = msg.entry?.id;
+        if (!voiceRef.current?.speaking) {
+          const quip = ACTIVITY_QUIPS[Math.floor(Math.random() * ACTIVITY_QUIPS.length)];
+          setTimeout(() => voiceRef.current?.speak(quip(msg.entry.agentName)), 300);
+        }
+      }
     }
     if (msg.type === 'install_log') setTermLogs(prev => [...prev, msg.text]);
     if (msg.type === 'install_start') { setInstalling(true); setTermLogs([]); }
@@ -309,11 +329,8 @@ export default function App() {
       setDivisions(div);
       setStats(st);
       setActivities(acts);
-      setTimeout(() => {
-        setLoading(false);
-        setGreeting(true);
-      }, 600);
-    }).catch(() => setLoading(false));
+      setDataReady(true);
+    }).catch(() => setDataReady(true));
   }, []);
 
   const filtered = agents.filter(a => {
@@ -330,7 +347,12 @@ export default function App() {
   const handleSelectAgent = useCallback((agent) => {
     setSelectedAgent(agent);
     trackActivity(agent, 'Accessed');
-  }, [trackActivity]);
+    // Ultron speaks the agent brief
+    if (!voice.speaking) {
+      const quip = ACTIVITY_QUIPS[Math.floor(Math.random() * ACTIVITY_QUIPS.length)];
+      voice.speak(quip(agent.name));
+    }
+  }, [trackActivity, voice]);
 
   const handleSpeakAgent = useCallback((agent) => {
     voice.speakAgent(agent);
@@ -348,17 +370,17 @@ export default function App() {
     <>
       <JarvisBackground videoSrc={videoBg} />
 
-      {loading && <LoadingScreen />}
-
-      {greeting && !loading && (
-        <GreetingOverlay
+      {/* Ultron boot screen — shown until user completes it */}
+      {!bootDone && (
+        <UltronBootScreen
           stats={stats}
           speak={voice.speak}
-          onDone={() => setGreeting(false)}
+          dataReady={dataReady}
+          onDone={() => { setBootDone(true); bootDoneRef.current = true; }}
         />
       )}
 
-      {!loading && (
+      {bootDone && (
         <>
           <div className="scanline" />
           <div className="app-layout">

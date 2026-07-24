@@ -993,6 +993,329 @@ body {
   text-transform: uppercase;
 }
 
+/* ══════════════════════════════════════════════════════
+   ULTRON BOOT SCREEN
+   ══════════════════════════════════════════════════════ */
+
+.ultron-boot {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 0, 0, 0.96);
+  backdrop-filter: blur(2px);
+  cursor: pointer;
+  transition: opacity 0.9s ease;
+  overflow: hidden;
+}
+
+.ultron-boot.exiting {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── Rings ── */
+.boot-rings {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.boot-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(220, 38, 38, 0.18);
+}
+
+.boot-ring.br1 { width: 200px; height: 200px; border-style: dashed; border-color: rgba(220,38,38,0.45); animation: boot-spin 10s linear infinite; }
+.boot-ring.br2 { width: 340px; height: 340px; border-color: rgba(220,38,38,0.22); animation: boot-spin 18s linear infinite reverse; }
+.boot-ring.br3 { width: 520px; height: 520px; border-color: rgba(220,38,38,0.12); animation: boot-spin 28s linear infinite; }
+.boot-ring.br4 { width: 740px; height: 740px; border-color: rgba(220,38,38,0.05); animation: boot-spin 50s linear infinite reverse; }
+
+.boot-ring.fast.br1 { animation-duration: 4s; }
+.boot-ring.fast.br2 { animation-duration: 7s; }
+.boot-ring.fast.br3 { animation-duration: 12s; }
+
+@keyframes boot-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ── Center column ── */
+.boot-center {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0;
+  max-width: 560px;
+  padding: 0 20px;
+}
+
+/* ── Ultron Eye ── */
+.boot-eye {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  border: 2px solid rgba(220,38,38,0.55);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 30px rgba(220,38,38,0.3), inset 0 0 20px rgba(220,38,38,0.1);
+  animation: eye-idle 3.5s ease-in-out infinite;
+  margin-bottom: 28px;
+}
+
+.boot-eye.active {
+  border-color: #dc2626;
+  box-shadow: 0 0 60px rgba(220,38,38,0.7), inset 0 0 30px rgba(220,38,38,0.25);
+  animation: eye-active 1.8s ease-in-out infinite;
+}
+
+.boot-eye.pulsing {
+  animation: eye-pulse 0.7s ease-in-out infinite;
+}
+
+.boot-eye-core {
+  position: absolute;
+  inset: 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, rgba(220,38,38,0.35), rgba(80,0,0,0.1));
+  animation: eye-core-pulse 2s ease-in-out infinite;
+}
+
+@keyframes eye-idle {
+  0%, 100% { box-shadow: 0 0 20px rgba(220,38,38,0.25), inset 0 0 12px rgba(220,38,38,0.08); transform: scale(1); }
+  50%       { box-shadow: 0 0 40px rgba(220,38,38,0.45), inset 0 0 20px rgba(220,38,38,0.15); transform: scale(1.03); }
+}
+
+@keyframes eye-active {
+  0%, 100% { box-shadow: 0 0 50px rgba(220,38,38,0.6), inset 0 0 25px rgba(220,38,38,0.2); transform: scale(1); }
+  50%       { box-shadow: 0 0 90px rgba(220,38,38,0.9), inset 0 0 40px rgba(220,38,38,0.35); transform: scale(1.05); }
+}
+
+@keyframes eye-pulse {
+  0%, 100% { box-shadow: 0 0 40px rgba(220,38,38,0.5), inset 0 0 20px rgba(220,38,38,0.18); transform: scale(1); }
+  50%       { box-shadow: 0 0 100px rgba(220,38,38,1), 0 0 20px rgba(220,38,38,0.5), inset 0 0 50px rgba(220,38,38,0.4); transform: scale(1.08); }
+}
+
+@keyframes eye-core-pulse {
+  0%, 100% { opacity: 0.6; }
+  50%       { opacity: 1; }
+}
+
+/* ── Titles ── */
+.boot-title {
+  font-family: var(--font-hud);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 7px;
+  color: var(--accent-blue);
+  text-shadow: 0 0 20px rgba(220,38,38,0.7);
+  margin-bottom: 6px;
+}
+
+.boot-subtitle {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 4px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 32px;
+}
+
+/* ── Waveform ── */
+.boot-waveform {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 56px;
+  margin-bottom: 28px;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.boot-waveform.visible { opacity: 1; }
+
+.boot-bar {
+  width: 3px;
+  border-radius: 3px;
+  background: linear-gradient(to top, #7f1d1d, #dc2626, #ff6b6b);
+  height: 4px;
+  flex-shrink: 0;
+  transition: height 0.15s ease;
+  box-shadow: 0 0 4px rgba(220,38,38,0.5);
+}
+
+.boot-bar.animate {
+  animation-name: bar-wave;
+  animation-duration: var(--dur, 0.4s);
+  animation-delay: var(--dly, 0s);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+  animation-fill-mode: both;
+}
+
+.boot-bar.idle { height: 4px !important; }
+
+@keyframes bar-wave {
+  0%   { height: 4px; opacity: 0.5; }
+  100% { height: var(--bar-h, 30px); opacity: 1; }
+}
+
+/* ── Speech segments ── */
+.boot-segments {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-height: 100px;
+  margin-bottom: 24px;
+}
+
+.boot-seg {
+  animation: seg-appear 0.6s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: #ffe8e8;
+  letter-spacing: 1px;
+  text-align: center;
+}
+
+.boot-seg.first {
+  font-family: var(--font-hud);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--accent-blue);
+  letter-spacing: 5px;
+  text-shadow: 0 0 20px rgba(220,38,38,0.8);
+  margin-bottom: 4px;
+}
+
+.boot-seg-arrow {
+  color: var(--accent-blue);
+  opacity: 0.7;
+}
+
+@keyframes seg-appear {
+  from { opacity: 0; transform: translateY(16px); filter: blur(4px); }
+  to   { opacity: 1; transform: translateY(0);    filter: blur(0); }
+}
+
+/* ── Click prompt ── */
+.boot-prompt {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-top: 12px;
+}
+
+.boot-prompt.ready {
+  color: var(--accent-blue);
+  text-shadow: 0 0 10px rgba(220,38,38,0.5);
+  animation: prompt-blink 1.2s ease-in-out infinite;
+}
+
+.boot-prompt.loading {
+  color: var(--text-muted);
+  animation: prompt-blink 2s ease-in-out infinite;
+}
+
+@keyframes prompt-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+
+/* ── Skip hint ── */
+.boot-skip {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  animation: prompt-blink 2s ease-in-out infinite;
+  margin-top: 8px;
+}
+
+/* ── Boot log panel ── */
+.boot-log-panel {
+  position: absolute;
+  bottom: 40px;
+  left: 40px;
+  width: 300px;
+  background: rgba(8, 0, 0, 0.75);
+  border: 1px solid rgba(220,38,38,0.18);
+  border-radius: 4px;
+  padding: 12px;
+  z-index: 2;
+  animation: log-appear 0.4s ease;
+}
+
+@keyframes log-appear {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.boot-log-title {
+  font-family: var(--font-hud);
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  border-bottom: 1px solid rgba(220,38,38,0.1);
+  padding-bottom: 6px;
+}
+
+.boot-log-scroll {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.7;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.boot-log-scroll::-webkit-scrollbar { width: 0; }
+
+.bll-cmd  { color: var(--text-secondary); }
+.bll-ok   { color: #00cc66; }
+.bll-warn { color: #ffd700; }
+.bll-done { color: var(--accent-blue); font-weight: 700; letter-spacing: 1px; text-shadow: 0 0 8px rgba(220,38,38,0.5); }
+
+.boot-log-line {
+  animation: log-line-appear 0.25s ease both;
+}
+
+@keyframes log-line-appear {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* ── Corner HUD brackets ── */
+.boot-corner {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  z-index: 2;
+  opacity: 0.6;
+}
+
+.boot-corner.tl { top: 20px;    left: 20px;    border-top: 2px solid #dc2626;  border-left: 2px solid #dc2626; }
+.boot-corner.tr { top: 20px;    right: 20px;   border-top: 2px solid #dc2626;  border-right: 2px solid #dc2626; }
+.boot-corner.bl { bottom: 20px; left: 20px;    border-bottom: 2px solid #dc2626; border-left: 2px solid #dc2626; }
+.boot-corner.br { bottom: 20px; right: 20px;   border-bottom: 2px solid #dc2626; border-right: 2px solid #dc2626; }
+
 /* ---- Loading ---- */
 .loading-screen {
   position: fixed;
