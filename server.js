@@ -131,7 +131,7 @@ app.post('/api/tts', async (req, res) => {
         headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text,
-          model_id: 'eleven_monolingual_v1',
+          model_id: 'eleven_multilingual_v2',
           voice_settings: {
             stability: 0.35,
             similarity_boost: 0.80,
