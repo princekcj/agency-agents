@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Zap, Check, ChevronRight, Terminal } from 'lucide-react';
+import { X, Zap, Check, Terminal, MessageSquare } from 'lucide-react';
 import { useWebSocket } from '../hooks/useWebSocket.js';
 
 const TOOLS = [
@@ -17,10 +17,10 @@ const TOOLS = [
   { id: 'vibe',        label: 'Mistral Vibe',accent: '#FA520F', icon: '🎵' },
 ];
 
-export default function DeployModal({ agent, onClose }) {
+export default function DeployModal({ agent, onClose, onChat }) {
   const [selected, setSelected] = useState([]);
-  const [phase, setPhase]     = useState('pick'); // 'pick' | 'deploying' | 'done'
-  const [logs, setLogs]       = useState([]);
+  const [phase, setPhase]       = useState('pick'); // 'pick' | 'deploying' | 'done'
+  const [logs, setLogs]         = useState([]);
   const [exitCode, setExitCode] = useState(null);
   const termRef = useRef(null);
 
@@ -28,12 +28,11 @@ export default function DeployModal({ agent, onClose }) {
     if (termRef.current) termRef.current.scrollTop = termRef.current.scrollHeight;
   }, [logs]);
 
-  // Listen to WS install events
   useWebSocket(React.useCallback((msg) => {
     if (phase !== 'deploying') return;
-    if (msg.type === 'install_log')  setLogs(p => [...p, msg.text]);
-    if (msg.type === 'install_error'){ setLogs(p => [...p, `[ERR] ${msg.text}`]); setPhase('done'); setExitCode(1); }
-    if (msg.type === 'install_done') { setPhase('done'); setExitCode(msg.exitCode); }
+    if (msg.type === 'install_log')   setLogs(p => [...p, msg.text]);
+    if (msg.type === 'install_error') { setLogs(p => [...p, `[ERR] ${msg.text}`]); setPhase('done'); setExitCode(1); }
+    if (msg.type === 'install_done')  { setPhase('done'); setExitCode(msg.exitCode); }
   }, [phase]));
 
   const toggleTool = (id) => setSelected(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
@@ -47,6 +46,11 @@ export default function DeployModal({ agent, onClose }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ division: agent.division, slug: agent.slug, tools: selected }),
     });
+  };
+
+  const handleChat = () => {
+    onClose();
+    onChat?.(agent);
   };
 
   return (
@@ -105,9 +109,14 @@ export default function DeployModal({ agent, onClose }) {
               {phase === 'deploying' && <span className="terminal-cursor" />}
             </div>
             {phase === 'done' && (
-              <button className="deploy-action-btn" style={{ marginTop: 10 }} onClick={onClose}>
-                <Check size={13} /> Done
-              </button>
+              <div className="deploy-done-actions">
+                <button className="deploy-action-btn deploy-chat-btn" onClick={handleChat}>
+                  <MessageSquare size={13} /> Chat with {agent.name}
+                </button>
+                <button className="deploy-action-btn" onClick={onClose}>
+                  <Check size={13} /> Done
+                </button>
+              </div>
             )}
           </div>
         )}

@@ -718,6 +718,7 @@ export default function App() {
             <DeployModal
               agent={deployAgent}
               onClose={() => setDeployAgent(null)}
+              onChat={handleChatAgent}
             />
           )}
 
