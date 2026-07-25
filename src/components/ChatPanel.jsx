@@ -16,6 +16,7 @@ const LS_MDL = 'agency_openrouter_model';
 
 function sanitizeHeaderValue(value) {
   return String(value || '').replace(/[^\x20-\x7E]/g, '').trim();
+
 }
 
 function buildSystemPrompt(agent) {
@@ -86,8 +87,11 @@ export default function ChatPanel({ agent, onClose, initialContext }) {
   }, [hasKey]);
 
   const saveKey = () => {
-    const k = sanitizeHeaderValue(keyInput);
+
+    const raw = keyInput.trim();
+    const k = sanitizeHeaderValue(raw);
     if (!k) return;
+    if (k !== raw) setError('Some characters were removed from your key (e.g. em-dashes from copy-paste). Verify the key looks correct.');
     localStorage.setItem(LS_KEY, k);
     setApiKey(k);
     setKeyInput('');
@@ -119,9 +123,22 @@ export default function ChatPanel({ agent, onClose, initialContext }) {
     setLoading(true);
 
     try {
+      const cleanKey = sanitizeHeaderValue(apiKey);
+      if (!cleanKey) {
+        setError('API key is empty or contains only invalid characters. Re-enter it in Settings.');
+        setLoading(false);
+        return;
+      }
+      // If stored key had bad chars, fix it silently going forward
+      if (cleanKey !== apiKey) {
+        localStorage.setItem(LS_KEY, cleanKey);
+        setApiKey(cleanKey);
+      }
+
       const res = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-openrouter-key': cleanApiKey },
+
+        headers: { 'Content-Type': 'application/json', 'x-openrouter-key': cleanKey },
         body: JSON.stringify({
           model,
           stream: false,
@@ -134,7 +151,7 @@ export default function ChatPanel({ agent, onClose, initialContext }) {
       const data = await res.json();
       if (!res.ok) {
         const status = res.status;
-        if (status === 401) setError('Invalid API key. Check your key at openrouter.ai/keys.');
+        if (status === 401) setError('Invalid API key — check it at openrouter.ai/keys.');
         else if (status === 429) setError('Rate limit reached. Try a different model or wait a moment.');
         else setError(data.error || `Error ${status}`);
       } else {
@@ -142,7 +159,7 @@ export default function ChatPanel({ agent, onClose, initialContext }) {
         setMessages([...history, { role: 'assistant', content: reply }]);
       }
     } catch (e) {
-      setError(e.message);
+      setError(`Failed to send: ${e.message}`);
     } finally {
       setLoading(false);
     }

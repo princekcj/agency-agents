@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Plus, X, Play, Loader, Settings, Key, ArrowDown, Bot, Download, MessageSquare, Send, User } from 'lucide-react';
+import { Plus, X, Play, Loader, Settings, Key, ArrowDown, Bot, Download, MessageSquare, Send, User, Clock, Trash2, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 
 const LS_KEY = 'agency_openrouter_key';
 const LS_MDL = 'agency_openrouter_model';
@@ -16,6 +16,14 @@ const FREE_MODELS = [
   { id: 'deepseek/deepseek-chat-v3-0324:free',       label: 'DeepSeek V3' },
   { id: 'google/gemma-3-27b-it:free',                label: 'Gemma 3 27B' },
   { id: 'mistralai/mistral-7b-instruct:free',        label: 'Mistral 7B' },
+];
+
+const INTERVALS = [
+  { label: 'Every hour',    cron: '0 * * * *' },
+  { label: 'Every 4 hours', cron: '0 */4 * * *' },
+  { label: 'Every 6 hours', cron: '0 */6 * * *' },
+  { label: 'Every 12 hours',cron: '0 */12 * * *' },
+  { label: 'Daily at time', cron: null },  // uses custom time
 ];
 
 function buildSystemPrompt(agent) {
@@ -53,7 +61,21 @@ function callAgent(agent, messages, apiKey, model, schedulerToken = '') {
       stream: false,
       messages: [{ role: 'system', content: buildSystemPrompt(agent) }, ...messages],
     }),
-  }).then(r => r.json());
+  }).then(async r => {
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+    return data;
+  });
+}
+
+function downloadMarkdown(filename, content) {
+  const blob = new Blob([content], { type: 'text/markdown' });
+  const url  = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function downloadPipelineResults(pipeline, results, input) {
@@ -76,20 +98,283 @@ function downloadPipelineResults(pipeline, results, input) {
     lines.push(`## ${step.agent.emoji} ${step.agent.name}`);
     lines.push(`*${step.agent.divisionLabel}*`);
     lines.push('');
-    lines.push(step.output || '(no output)');
+    lines.push(step.output || step.error || '(no output)');
     lines.push('');
     lines.push('---');
     lines.push('');
   }
-  const blob = new Blob([lines.join('\n')], { type: 'text/markdown' });
-  const url  = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `pipeline-${Date.now()}.md`;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadMarkdown(`pipeline-${Date.now()}.md`, lines.join('\n'));
 }
 
+function downloadScheduleRun(run, scheduleName) {
+  const lines = [
+    `# Scheduled Pipeline Run — ${scheduleName}`,
+    `**Status:** ${run.status}`,
+    `**Started:** ${new Date(run.startedAt).toLocaleString()}`,
+    `**Completed:** ${new Date(run.completedAt).toLocaleString()}`,
+    '',
+    '---',
+    '',
+  ];
+  for (const r of run.results) {
+    lines.push(`## ${r.agentEmoji} ${r.agentName}`);
+    lines.push('');
+    if (r.error) lines.push(`⚠ Error: ${r.error}`);
+    else lines.push(r.output || '(no output)');
+    lines.push('');
+    lines.push('---');
+    lines.push('');
+  }
+  downloadMarkdown(`scheduled-run-${run.id}.md`, lines.join('\n'));
+}
+
+// ── Schedule Panel ─────────────────────────────────────────────────────────────
+function SchedulePanel({ pipeline, input, apiKey, model }) {
+  const [schedules, setSchedules]       = useState([]);
+  const [loading, setLoading]           = useState(false);
+  const [saving, setSaving]             = useState(false);
+  const [error, setError]               = useState('');
+  const [success, setSuccess]           = useState('');
+
+  // New schedule form
+  const [schedName, setSchedName]       = useState('');
+  const [intervalIdx, setIntervalIdx]   = useState(0);
+  const [dailyTime, setDailyTime]       = useState('09:00');
+  const [showForm, setShowForm]         = useState(false);
+
+  // Expanded run viewer
+  const [expandedRuns, setExpandedRuns] = useState({});
+  const [runs, setRuns]                 = useState({});  // scheduleId -> runs[]
+
+  const fetchSchedules = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/schedules');
+      setSchedules(await res.json());
+    } catch { setError('Failed to load schedules'); }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchSchedules(); }, [fetchSchedules]);
+
+  const buildCron = () => {
+    const chosen = INTERVALS[intervalIdx];
+    if (chosen.cron) return chosen.cron;
+    // Daily at time
+    const [hh, mm] = dailyTime.split(':').map(Number);
+    return `${mm} ${hh} * * *`;
+  };
+
+  const buildIntervalLabel = () => {
+    const chosen = INTERVALS[intervalIdx];
+    if (chosen.cron) return chosen.label;
+    return `Daily at ${dailyTime}`;
+  };
+
+  const saveSchedule = async () => {
+    if (!schedName.trim()) { setError('Give this schedule a name.'); return; }
+    if (!pipeline.length)  { setError('Add at least one agent to the pipeline first.'); return; }
+    if (!input.trim())     { setError('Enter an initial prompt in the run panel first.'); return; }
+    if (!apiKey)           { setError('Enter your OpenRouter API key first.'); return; }
+
+    setSaving(true);
+    setError('');
+    try {
+      const res = await fetch('/api/schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: schedName.trim(),
+          pipeline,
+          initialInput: input,
+          apiKey,
+          model,
+          cronExpr: buildCron(),
+          intervalLabel: buildIntervalLabel(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || 'Failed to save'); }
+      else {
+        setSuccess('Schedule saved!');
+        setSchedName('');
+        setShowForm(false);
+        fetchSchedules();
+        setTimeout(() => setSuccess(''), 3000);
+      }
+    } catch (e) { setError(e.message); }
+    setSaving(false);
+  };
+
+  const deleteSchedule = async (id) => {
+    await fetch(`/api/schedules/${id}`, { method: 'DELETE' });
+    fetchSchedules();
+  };
+
+  const toggleSchedule = async (id) => {
+    await fetch(`/api/schedules/${id}/toggle`, { method: 'PATCH' });
+    fetchSchedules();
+  };
+
+  const runNow = async (id) => {
+    await fetch(`/api/schedules/${id}/run`, { method: 'POST' });
+    setSuccess('Pipeline started! Check runs in a moment.');
+    setTimeout(() => { setSuccess(''); fetchSchedules(); }, 8000);
+  };
+
+  const loadRuns = async (id) => {
+    const isOpen = expandedRuns[id];
+    if (isOpen) {
+      setExpandedRuns(p => ({ ...p, [id]: false }));
+      return;
+    }
+    try {
+      const res = await fetch(`/api/schedules/${id}/runs`);
+      const data = await res.json();
+      setRuns(p => ({ ...p, [id]: data }));
+      setExpandedRuns(p => ({ ...p, [id]: true }));
+    } catch { setError('Failed to load runs'); }
+  };
+
+  return (
+    <div className="sched-panel">
+      <div className="sched-panel-header">
+        <Clock size={12} />
+        <span>SCHEDULED PIPELINES</span>
+        <button className="sched-refresh-btn" onClick={fetchSchedules} title="Refresh">
+          <RefreshCw size={10} />
+        </button>
+        <button className="sched-new-btn" onClick={() => setShowForm(s => !s)}>
+          <Plus size={10} /> New Schedule
+        </button>
+      </div>
+
+      {error   && <div className="sched-error">{error}</div>}
+      {success && <div className="sched-success">{success}</div>}
+
+      {showForm && (
+        <div className="sched-form">
+          <div className="sched-form-label">Schedule Name</div>
+          <input
+            className="sched-input"
+            placeholder="e.g. Daily Market Brief"
+            value={schedName}
+            onChange={e => setSchedName(e.target.value)}
+          />
+
+          <div className="sched-form-label" style={{ marginTop: 10 }}>Run Frequency</div>
+          <div className="sched-interval-list">
+            {INTERVALS.map((iv, i) => (
+              <button
+                key={i}
+                className={`sched-interval-btn ${intervalIdx === i ? 'active' : ''}`}
+                onClick={() => setIntervalIdx(i)}
+              >
+                {iv.label}
+              </button>
+            ))}
+          </div>
+
+          {INTERVALS[intervalIdx].cron === null && (
+            <div className="sched-time-row">
+              <span className="sched-form-label">Time (UTC)</span>
+              <input
+                type="time"
+                className="sched-time-input"
+                value={dailyTime}
+                onChange={e => setDailyTime(e.target.value)}
+              />
+            </div>
+          )}
+
+          <div className="sched-form-hint">
+            Uses current pipeline ({pipeline.length} agent{pipeline.length !== 1 ? 's' : ''}) and prompt.
+          </div>
+
+          <button className="sched-save-btn" onClick={saveSchedule} disabled={saving}>
+            {saving ? <Loader size={11} className="spin" /> : <Clock size={11} />}
+            {saving ? 'Saving…' : 'Save Schedule'}
+          </button>
+        </div>
+      )}
+
+      {loading && <div className="sched-loading">Loading schedules…</div>}
+
+      {!loading && schedules.length === 0 && !showForm && (
+        <div className="sched-empty">No schedules yet. Create one above to automate your pipeline.</div>
+      )}
+
+      {schedules.map(s => (
+        <div key={s.id} className={`sched-item ${s.enabled ? 'enabled' : 'disabled'}`}>
+          <div className="sched-item-header">
+            <div className="sched-item-name">{s.name}</div>
+            <div className="sched-item-actions">
+              <button className="sched-action-btn" title="Run now" onClick={() => runNow(s.id)}>
+                <Play size={10} />
+              </button>
+              <button className="sched-action-btn" title={s.enabled ? 'Pause' : 'Enable'} onClick={() => toggleSchedule(s.id)}>
+                {s.enabled ? <ToggleRight size={12} style={{ color: 'var(--accent-green)' }} /> : <ToggleLeft size={12} />}
+              </button>
+              <button className="sched-action-btn" title="Delete" onClick={() => deleteSchedule(s.id)}>
+                <Trash2 size={10} style={{ color: '#f87171' }} />
+              </button>
+            </div>
+          </div>
+          <div className="sched-item-meta">
+            <span className="sched-badge">{s.intervalLabel}</span>
+            {s.lastRunAt && (
+              <span className={`sched-badge ${s.lastRunStatus}`}>
+                Last: {new Date(s.lastRunAt).toLocaleString()} · {s.lastRunStatus}
+              </span>
+            )}
+          </div>
+          <div className="sched-item-agents">
+            {s.pipeline.map((a, i) => (
+              <span key={i} className="sched-agent-chip">{a.emoji} {a.name}</span>
+            ))}
+          </div>
+          <button className="sched-runs-toggle" onClick={() => loadRuns(s.id)}>
+            {expandedRuns[s.id] ? <ChevronUp size={9} /> : <ChevronDown size={9} />}
+            Run History
+          </button>
+
+          {expandedRuns[s.id] && (
+            <div className="sched-runs">
+              {(runs[s.id] || []).length === 0 && (
+                <div className="sched-empty" style={{ padding: '8px 12px' }}>No runs yet.</div>
+              )}
+              {(runs[s.id] || []).map(run => (
+                <div key={run.id} className={`sched-run ${run.status}`}>
+                  <div className="sched-run-header">
+                    <span className={`sched-badge ${run.status}`}>{run.status}</span>
+                    <span className="sched-run-time">{new Date(run.startedAt).toLocaleString()}</span>
+                    <button
+                      className="sched-action-btn"
+                      title="Download results"
+                      onClick={() => downloadScheduleRun(run, s.name)}
+                    >
+                      <Download size={10} />
+                    </button>
+                  </div>
+                  {run.results.map((r, i) => (
+                    <div key={i} className="sched-run-step">
+                      <span className="sched-run-agent">{r.agentEmoji} {r.agentName}</span>
+                      <div className="sched-run-output">
+                        {r.error ? <span style={{ color: '#f87171' }}>⚠ {r.error}</span> : (r.output?.slice(0, 300) + (r.output?.length > 300 ? '…' : ''))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Main Pipeline Builder ─────────────────────────────────────────────────────
 export default function PipelineBuilder({ agents }) {
   const [pipeline, setPipeline]       = useState([]);
   const [savedPipelines, setSavedPipelines] = useState(() => loadSavedPipelines());
@@ -106,6 +391,7 @@ export default function PipelineBuilder({ agents }) {
   const [model, setModel]             = useState(() => localStorage.getItem(LS_MDL) || FREE_MODELS[0].id);
   const [searchQ, setSearchQ]         = useState('');
   const [showPicker, setShowPicker]   = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
 
   // Post-run chat with the final agent
   const [chatMessages, setChatMessages] = useState([]);
@@ -234,7 +520,6 @@ export default function PipelineBuilder({ agents }) {
     setChatMessages(history);
     setChatLoading(true);
 
-    // System prompt: final agent + full pipeline context
     const systemWithContext = buildSystemPrompt(lastAgent) +
       `\n\n---\n\nFULL PIPELINE OUTPUT (from previous agents in this session):\n\n${pipelineContext}`;
 
@@ -427,15 +712,27 @@ export default function PipelineBuilder({ agents }) {
               </button>
               {pipelineDone && (
                 <button className="pipeline-export-btn"
-                  title="Export results as markdown"
+                  title="Download all results as markdown"
                   onClick={() => downloadPipelineResults(pipeline, results, input)}
                 >
-                  <Download size={13} /> Export
+                  <Download size={13} /> Export All
                 </button>
               )}
+              <button
+                className={`pipeline-schedule-btn ${showSchedule ? 'active' : ''}`}
+                title="Manage scheduled runs"
+                onClick={() => setShowSchedule(s => !s)}
+              >
+                <Clock size={13} /> Schedule
+              </button>
             </div>
             <div className="pipeline-model-hint"><Bot size={9} /> {modelLabel}</div>
           </>
+        )}
+
+        {/* Scheduler panel */}
+        {showSchedule && (
+          <SchedulePanel pipeline={pipeline} input={input} apiKey={apiKey} model={model} />
         )}
 
         {/* Step results */}
@@ -449,8 +746,26 @@ export default function PipelineBuilder({ agents }) {
                   <span className={`pipeline-result-badge ${step.status}`}>
                     {step.status === 'running' ? <Loader size={9} className="spin" /> : step.status}
                   </span>
+                  {step.status === 'done' && step.output && (
+                    <button
+                      className="pipeline-step-dl-btn"
+                      title={`Download ${step.agent.name} output`}
+                      onClick={() => downloadMarkdown(
+                        `${step.agent.slug || step.agent.name.toLowerCase().replace(/\s+/g,'-')}-output-${Date.now()}.md`,
+                        `# ${step.agent.emoji} ${step.agent.name} Output\n\n${step.output}`
+                      )}
+                    >
+                      <Download size={9} />
+                    </button>
+                  )}
                 </div>
-                {step.output && <div className="pipeline-result-body">{step.output}</div>}
+                {(step.output || step.status === 'error') && (
+                  <div className="pipeline-result-body">
+                    {step.status === 'error'
+                      ? <span style={{ color: '#f87171' }}>⚠ {step.output}</span>
+                      : step.output}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -491,7 +806,7 @@ export default function PipelineBuilder({ agents }) {
                   </div>
                 </div>
               )}
-              {chatError && <div className="chat-error">{chatError}</div>}
+              {chatError && <div className="chat-error">⚠ {chatError}</div>}
               <div ref={bottomRef} />
             </div>
 
