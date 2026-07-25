@@ -119,7 +119,7 @@ app.get('/api/stats', (req, res) => {
   });
 });
 
-// ── ElevenLabs TTS proxy ───────────────────────────────────────────────────────
+// -- ElevenLabs TTS proxy ------------------------------------------------------
 app.post('/api/tts', async (req, res) => {
   const { text } = req.body;
   const apiKey = process.env.ELEVENLABS_API_KEY;
@@ -157,7 +157,7 @@ app.post('/api/tts', async (req, res) => {
   }
 });
 
-// ── Real activity log ──────────────────────────────────────────────────────────
+// -- Real activity log ---------------------------------------------------------
 // Tracks genuine user interactions: agent views, briefings, searches.
 const activityLog = [];
 
@@ -197,73 +197,127 @@ app.get('/api/stats/24h', (req, res) => {
   const recent = activityLog.filter(e => new Date(e.startedAt).getTime() > cutoff);
 
   // Count by division
-  const divMap = {};
+  const byDivision = {};
   for (const e of recent) {
-    const key = e.division;
-    if (!divMap[key]) divMap[key] = { id: key, label: DIVISIONS[key]?.label || key, color: DIVISIONS[key]?.color || '#dc2626', count: 0 };
-    divMap[key].count++;
+    byDivision[e.division] = (byDivision[e.division] || 0) + 1;
   }
-  const byDivision = Object.values(divMap).sort((a, b) => b.count - a.count);
 
-  // Top agents
-  const agentMap = {};
+  // Most active agents
+  const agentCounts = {};
   for (const e of recent) {
-    if (!agentMap[e.agentId]) agentMap[e.agentId] = { agentId: e.agentId, agentName: e.agentName, agentEmoji: e.agentEmoji || '🤖', count: 0 };
-    agentMap[e.agentId].count++;
+    if (!agentCounts[e.agentName]) agentCounts[e.agentName] = { name: e.agentName, emoji: e.agentEmoji, count: 0 };
+    agentCounts[e.agentName].count++;
   }
-  const topAgents = Object.values(agentMap).sort((a, b) => b.count - a.count).slice(0, 8);
+  const topAgents = Object.values(agentCounts).sort((a, b) => b.count - a.count).slice(0, 5);
 
-  // By hour (last 24h, bucketed)
-  const hourBuckets = {};
-  for (let h = 0; h < 24; h++) hourBuckets[h] = 0;
-  for (const e of recent) {
-    const h = new Date(e.startedAt).getHours();
-    hourBuckets[h] = (hourBuckets[h] || 0) + 1;
-  }
-  const byHour = Object.entries(hourBuckets).map(([hour, count]) => ({ hour: Number(hour), count }));
-
-  res.json({ total: recent.length, byDivision, topAgents, byHour });
+  res.json({ total: recent.length, byDivision, topAgents });
 });
 
-// ── Single-agent install — streams output via WebSocket ───────────────────────
-app.post('/api/install/agent', (req, res) => {
-  const { division, slug, tools: toolList } = req.body;
-  if (!division || !slug || !Array.isArray(toolList) || toolList.length === 0) {
-    return res.status(400).json({ error: 'division, slug, and tools[] required' });
-  }
+// -- Scheduler Security --------------------------------------------------------
+// Random per-process token: changes on every server restart.
+// Frontend fetches it once on init; all scheduler routes require it.
+const SCHEDULER_TOKEN = crypto.randomBytes(32).toString('hex');
 
-  res.json({ ok: true, message: `Installing ${slug} to ${toolList.join(', ')}` });
-  const repoRoot = __dirname;
-  const agentArg = `${division}/${slug}`;
+// Derive a 32-byte AES key from SESSION_SECRET so stored API keys are encrypted
+// at rest and useless without the server's secret.
+const _rawSecret = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
+const ENC_KEY = crypto.createHash('sha256').update(_rawSecret).digest();
 
-  broadcast({ type: 'install_start', tool: 'agent', agentId: agentArg });
+function encrypt(text) {
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv('aes-256-cbc', ENC_KEY, iv);
+  const encrypted = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()]);
+  return iv.toString('hex') + ':' + encrypted.toString('hex');
+}
 
-  const convert = spawn('bash', ['scripts/convert.sh'], { cwd: repoRoot, env: { ...process.env } });
-  convert.stdout.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
-  convert.stderr.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
-  convert.on('close', code => {
-    if (code !== 0) { broadcast({ type: 'install_error', text: `convert.sh exited ${code}` }); return; }
-    broadcast({ type: 'install_log', text: '\n[convert complete] Installing agent...\n' });
+function decrypt(data) {
+  const [ivHex, encHex] = data.split(':');
+  const iv = Buffer.from(ivHex, 'hex');
+  const enc = Buffer.from(encHex, 'hex');
+  const decipher = crypto.createDecipheriv('aes-256-cbc', ENC_KEY, iv);
+  return Buffer.concat([decipher.update(enc), decipher.final()]).toString('utf8');
+}
 
-    const toolArgs = [];
-    toolList.forEach(t => { toolArgs.push('--tool'); toolArgs.push(t); });
-
-    const install = spawn('bash', [
-      'scripts/install.sh',
-      '--agent', slug,
-      ...toolArgs,
-      '--no-interactive',
-    ], { cwd: repoRoot, env: { ...process.env } });
-
-    install.stdout.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
-    install.stderr.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
-    install.on('close', code2 => {
-      broadcast({ type: 'install_done', exitCode: code2, agentId: agentArg });
-    });
-  });
+app.get('/api/scheduler/token', (req, res) => {
+  res.json({ token: SCHEDULER_TOKEN });
 });
 
-// ── OpenRouter chat proxy ──────────────────────────────────────────────────────
+// Middleware for scheduler routes
+function requireSchedulerToken(req, res, next) {
+  const token = req.headers['x-scheduler-token'];
+  if (token !== SCHEDULER_TOKEN) return res.status(403).json({ error: 'Forbidden' });
+  next();
+}
+
+// In-memory schedule store
+let schedules = [];
+
+// Persist schedules to disk so they survive server restarts
+const SCHEDULES_FILE = path.join(__dirname, '.schedules.json');
+
+function saveSchedules() {
+  fs.writeFileSync(SCHEDULES_FILE, JSON.stringify(schedules, null, 2));
+}
+
+function loadSchedules() {
+  try {
+    if (fs.existsSync(SCHEDULES_FILE)) {
+      schedules = JSON.parse(fs.readFileSync(SCHEDULES_FILE, 'utf8'));
+    }
+  } catch {
+    schedules = [];
+  }
+}
+
+app.post('/api/scheduler/key', requireSchedulerToken, (req, res) => {
+  const { key } = req.body;
+  if (!key) return res.status(400).json({ error: 'key required' });
+  const encrypted = encrypt(key);
+  res.json({ encrypted });
+});
+
+app.get('/api/scheduler/schedules', requireSchedulerToken, (req, res) => {
+  res.json(schedules.map(s => ({ ...s, encryptedKey: undefined })));
+});
+
+app.post('/api/scheduler/schedules', requireSchedulerToken, (req, res) => {
+  const { name, cron: cronExpr, pipeline, model, initialInput, encryptedKey } = req.body;
+  if (!name || !cronExpr || !pipeline || !encryptedKey) {
+    return res.status(400).json({ error: 'name, cron, pipeline, encryptedKey required' });
+  }
+  if (!cron.validate(cronExpr)) return res.status(400).json({ error: 'Invalid cron expression' });
+
+  const id = `sched-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const schedule = { id, name, cron: cronExpr, pipeline, model: model || 'meta-llama/llama-3.3-70b-instruct:free', initialInput: initialInput || '', encryptedKey, active: true, lastRun: null, nextRun: null };
+  schedules.push(schedule);
+  saveSchedules();
+  registerCronJob(schedule);
+  res.json({ ok: true, id });
+});
+
+app.delete('/api/scheduler/schedules/:id', requireSchedulerToken, (req, res) => {
+  const { id } = req.params;
+  const idx = schedules.findIndex(s => s.id === id);
+  if (idx === -1) return res.status(404).json({ error: 'Not found' });
+  schedules.splice(idx, 1);
+  saveSchedules();
+  const job = cronJobs.get(id);
+  if (job) { job.stop(); cronJobs.delete(id); }
+  res.json({ ok: true });
+});
+
+app.patch('/api/scheduler/schedules/:id/toggle', requireSchedulerToken, (req, res) => {
+  const { id } = req.params;
+  const schedule = schedules.find(s => s.id === id);
+  if (!schedule) return res.status(404).json({ error: 'Not found' });
+  schedule.active = !schedule.active;
+  saveSchedules();
+  const job = cronJobs.get(id);
+  if (job) { if (schedule.active) job.start(); else job.stop(); }
+  res.json({ ok: true, active: schedule.active });
+});
+
+// -- OpenRouter chat proxy -----------------------------------------------------
 app.post('/api/chat', async (req, res) => {
   const apiKey = req.headers['x-openrouter-key'];
   if (!apiKey) return res.status(401).json({ error: 'Provide x-openrouter-key header' });
@@ -278,7 +332,7 @@ app.post('/api/chat', async (req, res) => {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': 'https://the-agency.replit.app',
-        'X-Title': 'The Agency — Ultron Protocol',
+        'X-Title': 'The Agency - Ultron Protocol',
       },
       body: JSON.stringify({ model, messages, stream }),
     });
@@ -306,86 +360,56 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
-// ── Scheduler Security ─────────────────────────────────────────────────────────
-// Random per-process token: changes on every server restart.
-// Frontend fetches it once on init; all scheduler routes require it.
-const SCHEDULER_TOKEN = crypto.randomBytes(32).toString('hex');
+// -- Single-agent install - streams output via WebSocket -----------------------
+app.post('/api/install', async (req, res) => {
+  const { agentId } = req.body;
+  if (!agentId) return res.status(400).json({ error: 'agentId required' });
 
-// Derive a 32-byte AES key from SESSION_SECRET so stored API keys are encrypted
-// at rest and useless without the server's secret.
-const _rawSecret = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
-const ENC_KEY = crypto.createHash('sha256').update(_rawSecret).digest();
+  res.json({ ok: true });
 
-function encryptApiKey(plaintext) {
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', ENC_KEY, iv);
-  const enc = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return `${iv.toString('hex')}:${tag.toString('hex')}:${enc.toString('hex')}`;
-}
+  const agents = getAgents();
+  const agent = agents.find(a => a.id === agentId);
+  if (!agent) return broadcast({ type: 'install_error', agentId, error: 'Agent not found' });
 
-function decryptApiKey(ciphertext) {
-  try {
-    const [ivHex, tagHex, encHex] = ciphertext.split(':');
-    const decipher = crypto.createDecipheriv('aes-256-gcm', ENC_KEY, Buffer.from(ivHex, 'hex'));
-    decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
-    return decipher.update(Buffer.from(encHex, 'hex')) + decipher.final('utf8');
-  } catch { return null; }
-}
+  broadcast({ type: 'install_start', agentId });
+  const agentArg = `${agent.division}/${agent.slug}`;
+  const toolList = ['npm', 'git', 'node', 'python'];
 
-// Middleware: all scheduler routes require the per-process token
-function requireSchedulerAuth(req, res, next) {
-  const token = req.headers['x-scheduler-token'];
-  if (!token || token.length !== SCHEDULER_TOKEN.length) return res.status(401).json({ error: 'Unauthorized' });
-  try {
-    if (!crypto.timingSafeEqual(Buffer.from(token, 'hex'), Buffer.from(SCHEDULER_TOKEN, 'hex'))) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-  } catch { return res.status(401).json({ error: 'Unauthorized' }); }
-  next();
-}
+  const toolArgs = [];
+  toolList.forEach(t => { toolArgs.push('--tool'); toolArgs.push(t); });
 
-// Frontend calls this once on init — returns the per-process token so the browser
-// can authenticate subsequent scheduler operations.
-app.get('/api/scheduler-token', (req, res) => {
-  res.json({ token: SCHEDULER_TOKEN });
+  const install = spawn('bash', ['scripts/install.sh',
+    '--agent', slug,
+    agentArg,
+    '--no-interactive',
+    ...toolArgs,
+  ]);
+
+  install.stdout.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
+  install.stderr.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
+  install.on('close', code2 => {
+    broadcast({ type: 'install_done', exitCode: code2, agentId: agentArg });
+  });
 });
 
-// ── Pipeline Scheduler ─────────────────────────────────────────────────────────
-const SCHEDULES_FILE = path.join(__dirname, '.agency-schedules.json');
-const SAVED_PIPELINES_FILE = path.join(__dirname, '.agency-saved-pipelines.json');
-const cronJobs = new Map(); // id -> cron task
+// -- Cron job registry ---------------------------------------------------------
+const cronJobs = new Map();
 
-function loadSchedules() {
+async function runSchedule(schedule) {
+  const { id, name, pipeline, model, initialInput, encryptedKey } = schedule;
+
+  let apiKey;
   try {
-    if (fs.existsSync(SCHEDULES_FILE)) return JSON.parse(fs.readFileSync(SCHEDULES_FILE, 'utf8'));
-  } catch { /* start fresh */ }
-  return [];
-}
-function saveSchedules(schedules) {
-  fs.writeFileSync(SCHEDULES_FILE, JSON.stringify(schedules, null, 2));
-}
-
-function loadSavedPipelines() {
-  try {
-    if (fs.existsSync(SAVED_PIPELINES_FILE)) return JSON.parse(fs.readFileSync(SAVED_PIPELINES_FILE, 'utf8'));
-  } catch { /* start fresh */ }
-  return [];
-}
-function saveSavedPipelines(pipelines) {
-  fs.writeFileSync(SAVED_PIPELINES_FILE, JSON.stringify(pipelines, null, 2));
-}
-
-async function runScheduledPipeline(schedule) {
-  const { id, pipeline, initialInput, encryptedApiKey, model } = schedule;
-  const apiKey = decryptApiKey(encryptedApiKey);
-  if (!apiKey) {
-    broadcast({ type: 'schedule_run_done', scheduleId: id, status: 'error', name: schedule.name, completedAt: new Date().toISOString() });
+    apiKey = decrypt(encryptedKey);
+  } catch {
+    broadcast({ type: 'schedule_error', scheduleId: id, error: 'Failed to decrypt API key' });
     return;
   }
 
-  const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-  const startedAt = new Date().toISOString();
+  const runId = `run-${Date.now()}`;
+  schedule.lastRun = new Date().toISOString();
+  saveSchedules();
+
   broadcast({ type: 'schedule_run_start', scheduleId: id, runId, name: schedule.name });
 
   const results = [];
@@ -407,7 +431,7 @@ async function runScheduledPipeline(schedule) {
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
           'HTTP-Referer': 'https://the-agency.replit.app',
-          'X-Title': 'The Agency — Scheduled Pipeline',
+          'X-Title': 'The Agency - Scheduled Pipeline',
         },
         body: JSON.stringify({ model, stream: false, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userContent }] }),
       });
@@ -427,187 +451,45 @@ async function runScheduledPipeline(schedule) {
     }
   }
 
-  const run = { id: runId, startedAt, completedAt: new Date().toISOString(), status: runStatus, results };
-  const schedules = loadSchedules();
-  const idx = schedules.findIndex(s => s.id === id);
-  if (idx !== -1) {
-    schedules[idx].lastRunAt = run.completedAt;
-    schedules[idx].lastRunStatus = runStatus;
-    schedules[idx].runs = [run, ...(schedules[idx].runs || [])].slice(0, 10);
-    saveSchedules(schedules);
-  }
-  broadcast({ type: 'schedule_run_done', scheduleId: id, runId, status: runStatus, name: schedule.name, completedAt: run.completedAt });
-  return run;
+  broadcast({ type: 'schedule_run_done', scheduleId: id, runId, name, status: runStatus, results });
 }
 
-function startScheduleJob(schedule) {
-  if (!schedule.enabled) return;
-  if (cronJobs.has(schedule.id)) cronJobs.get(schedule.id).stop();
-  if (!cron.validate(schedule.cronExpr)) return;
-  const task = cron.schedule(schedule.cronExpr, () => {
-    const fresh = loadSchedules().find(s => s.id === schedule.id);
-    if (fresh && fresh.enabled) runScheduledPipeline(fresh);
-  }, { timezone: 'UTC' });
-  cronJobs.set(schedule.id, task);
+function registerCronJob(schedule) {
+  if (!cron.validate(schedule.cron)) return;
+  const job = cron.schedule(schedule.cron, () => runSchedule(schedule), { scheduled: schedule.active });
+  cronJobs.set(schedule.id, job);
 }
 
-// ── Saved Pipelines (named configs, no scheduling) ────────────────────────────
-app.get('/api/saved-pipelines', requireSchedulerAuth, (req, res) => {
-  res.json(loadSavedPipelines().map(p => ({
-    ...p,
-    pipeline: p.pipeline.map(a => ({ id: a.id, name: a.name, emoji: a.emoji, divisionLabel: a.divisionLabel, divisionColor: a.divisionColor })),
-  })));
-});
+// -- Boot: load persisted schedules + register cron jobs -----------------------
+loadSchedules();
+const boot = schedules.filter(s => s.active);
+boot.forEach(registerCronJob);
+console.log(`Loaded ${boot.length} schedule(s).`);
 
-app.post('/api/saved-pipelines', requireSchedulerAuth, (req, res) => {
-  const { name, pipeline, initialInput } = req.body;
-  if (!name || !pipeline?.length) return res.status(400).json({ error: 'name and pipeline required' });
-  const id = `sp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-  const saved = loadSavedPipelines();
-  saved.push({ id, name, pipeline, initialInput: initialInput || '', createdAt: new Date().toISOString() });
-  saveSavedPipelines(saved);
-  res.json({ ok: true, id });
-});
-
-app.delete('/api/saved-pipelines/:id', requireSchedulerAuth, (req, res) => {
-  const saved = loadSavedPipelines().filter(p => p.id !== req.params.id);
-  saveSavedPipelines(saved);
+// -- OpenClaw integration ------------------------------------------------------
+app.post('/api/openclaw/convert', (req, res) => {
   res.json({ ok: true });
-});
-
-// ── Schedule CRUD (all protected) ─────────────────────────────────────────────
-app.get('/api/schedules', requireSchedulerAuth, (req, res) => {
-  res.json(loadSchedules().map(s => ({
-    ...s,
-    encryptedApiKey: undefined,     // never expose the encrypted blob
-    hasKey: !!s.encryptedApiKey,    // just tell the frontend whether a key is stored
-    pipeline: s.pipeline.map(a => ({ id: a.id, name: a.name, emoji: a.emoji, divisionLabel: a.divisionLabel, divisionColor: a.divisionColor })),
-  })));
-});
-
-app.post('/api/schedules', requireSchedulerAuth, (req, res) => {
-  const { name, pipeline, initialInput, apiKey, model, cronExpr, intervalLabel } = req.body;
-  if (!name || !pipeline?.length || !initialInput || !apiKey || !cronExpr)
-    return res.status(400).json({ error: 'name, pipeline, initialInput, apiKey, cronExpr required' });
-  if (!cron.validate(cronExpr)) return res.status(400).json({ error: 'Invalid cron expression' });
-
-  const id = `sched-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-  const schedule = {
-    id, name,
-    pipeline,
-    initialInput,
-    encryptedApiKey: encryptApiKey(apiKey),   // store encrypted, not plaintext
-    model: model || 'meta-llama/llama-3.3-70b-instruct:free',
-    cronExpr, intervalLabel: intervalLabel || cronExpr,
-    enabled: true,
-    createdAt: new Date().toISOString(),
-    lastRunAt: null, lastRunStatus: null, runs: [],
-  };
-  const schedules = loadSchedules();
-  schedules.push(schedule);
-  saveSchedules(schedules);
-  startScheduleJob(schedule);
-  res.json({ ok: true, id });
-});
-
-app.delete('/api/schedules/:id', requireSchedulerAuth, (req, res) => {
-  const schedules = loadSchedules();
-  const idx = schedules.findIndex(s => s.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ error: 'Not found' });
-  schedules.splice(idx, 1);
-  saveSchedules(schedules);
-  if (cronJobs.has(req.params.id)) { cronJobs.get(req.params.id).stop(); cronJobs.delete(req.params.id); }
-  res.json({ ok: true });
-});
-
-app.patch('/api/schedules/:id/toggle', requireSchedulerAuth, (req, res) => {
-  const schedules = loadSchedules();
-  const idx = schedules.findIndex(s => s.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ error: 'Not found' });
-  schedules[idx].enabled = !schedules[idx].enabled;
-  saveSchedules(schedules);
-  if (schedules[idx].enabled) startScheduleJob(schedules[idx]);
-  else { if (cronJobs.has(req.params.id)) { cronJobs.get(req.params.id).stop(); cronJobs.delete(req.params.id); } }
-  res.json({ ok: true, enabled: schedules[idx].enabled });
-});
-
-app.post('/api/schedules/:id/run', requireSchedulerAuth, (req, res) => {
-  const schedule = loadSchedules().find(s => s.id === req.params.id);
-  if (!schedule) return res.status(404).json({ error: 'Not found' });
-  res.json({ ok: true, message: 'Pipeline run started' });
-  runScheduledPipeline(schedule);
-});
-
-// POST run ALL enabled schedules at once
-app.post('/api/schedules/run-all', requireSchedulerAuth, (req, res) => {
-  const enabled = loadSchedules().filter(s => s.enabled);
-  res.json({ ok: true, count: enabled.length });
-  for (const s of enabled) runScheduledPipeline(s);
-});
-
-app.get('/api/schedules/:id/runs', requireSchedulerAuth, (req, res) => {
-  const schedule = loadSchedules().find(s => s.id === req.params.id);
-  if (!schedule) return res.status(404).json({ error: 'Not found' });
-  res.json(schedule.runs || []);
-});
-
-// Boot: load and start all enabled schedules
-{
-  const boot = loadSchedules();
-  for (const s of boot) if (s.enabled) startScheduleJob(s);
-  console.log(`Loaded ${boot.length} schedule(s).`);
-}
-
-// Run OpenClaw install — streams output via WebSocket
-app.post('/api/install/openclaw', (req, res) => {
-  res.json({ ok: true, message: 'OpenClaw installation started. Watch the terminal panel.' });
-
-  const repoRoot = __dirname;
-
-  broadcast({ type: 'install_start', tool: 'openclaw' });
-
-  // Step 1: convert
   const convert = spawn('bash', ['scripts/convert.sh', '--tool', 'openclaw'], {
-    cwd: repoRoot,
-    env: { ...process.env, PATH: process.env.PATH }
+    cwd: __dirname,
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
-
-  convert.stdout.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
-  convert.stderr.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
-
-  convert.on('close', code => {
-    if (code !== 0) {
-      broadcast({ type: 'install_error', text: `convert.sh exited with code ${code}` });
-      return;
-    }
-    broadcast({ type: 'install_log', text: '\n[convert complete] Starting install...\n' });
-
-    const install = spawn('bash', ['scripts/install.sh', '--tool', 'openclaw', '--no-interactive', '--path', path.join(repoRoot, '.openclaw/agency-agents')], {
-      cwd: repoRoot,
-      env: { ...process.env, PATH: process.env.PATH }
-    });
-
-    install.stdout.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
-    install.stderr.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
-    install.on('close', code2 => {
-      broadcast({ type: 'install_done', exitCode: code2 });
-    });
-  });
+  convert.stdout.on('data', d => broadcast({ type: 'convert_log', text: d.toString() }));
+  convert.stderr.on('data', d => broadcast({ type: 'convert_log', text: d.toString() }));
+  convert.on('close', code => broadcast({ type: 'convert_done', exitCode: code }));
 });
 
-wss.on('connection', ws => {
-  ws.send(JSON.stringify({
-    type: 'connected',
-    message: 'ULTRON PROTOCOL ONLINE. All systems operational.'
-  }));
-
-  // Send current real activity log to newly connected client
-  if (activityLog.length > 0) {
-    ws.send(JSON.stringify({ type: 'activity_state', entries: activityLog.slice(0, 40) }));
-  }
+app.post('/api/openclaw/install', (req, res) => {
+  res.json({ ok: true });
+  const install = spawn('bash', ['scripts/install.sh', '--tool', 'openclaw', '--no-interactive', '--path', path.join(repoRoot, '.openclaw/agency-agents')], {
+    cwd: __dirname,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  install.stdout.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
+  install.stderr.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
+  install.on('close', code => broadcast({ type: 'install_done', exitCode: code }));
 });
 
-const PORT = 3001;
-server.listen(PORT, () => {
-  console.log(`The Agency — Ultron Protocol running on port ${PORT}`);
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`The Agency - Ultron Protocol running on port ${PORT}`);
 });
