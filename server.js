@@ -29,6 +29,12 @@ function broadcast(data) {
   });
 }
 
+// Strip any character outside printable ASCII (0x20-0x7E) — prevents ByteString
+// errors when the value is later used in an HTTP header.
+function sanitizeHeaderValue(value) {
+  return String(value || '').replace(/[^\x20-\x7E]/g, '').trim();
+}
+
 // Parse agent divisions from divisions.json
 const divisionsRaw = JSON.parse(fs.readFileSync(path.join(__dirname, 'divisions.json'), 'utf8'));
 const DIVISIONS = divisionsRaw.divisions;
@@ -130,7 +136,10 @@ app.post('/api/tts', async (req, res) => {
       `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`,
       {
         method: 'POST',
-        headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
+        headers: {
+          'xi-api-key': sanitizeHeaderValue(apiKey),
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
           text,
           model_id: 'eleven_multilingual_v2',
@@ -158,7 +167,6 @@ app.post('/api/tts', async (req, res) => {
 });
 
 // -- Real activity log ---------------------------------------------------------
-// Tracks genuine user interactions: agent views, briefings, searches.
 const activityLog = [];
 
 app.post('/api/activity', (req, res) => {
@@ -196,13 +204,11 @@ app.get('/api/stats/24h', (req, res) => {
   const cutoff = Date.now() - 24 * 60 * 60 * 1000;
   const recent = activityLog.filter(e => new Date(e.startedAt).getTime() > cutoff);
 
-  // Count by division
   const byDivision = {};
   for (const e of recent) {
     byDivision[e.division] = (byDivision[e.division] || 0) + 1;
   }
 
-  // Most active agents
   const agentCounts = {};
   for (const e of recent) {
     if (!agentCounts[e.agentName]) agentCounts[e.agentName] = { name: e.agentName, emoji: e.agentEmoji, count: 0 };
@@ -214,12 +220,8 @@ app.get('/api/stats/24h', (req, res) => {
 });
 
 // -- Scheduler Security --------------------------------------------------------
-// Random per-process token: changes on every server restart.
-// Frontend fetches it once on init; all scheduler routes require it.
 const SCHEDULER_TOKEN = crypto.randomBytes(32).toString('hex');
 
-// Derive a 32-byte AES key from SESSION_SECRET so stored API keys are encrypted
-// at rest and useless without the server's secret.
 const _rawSecret = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
 const ENC_KEY = crypto.createHash('sha256').update(_rawSecret).digest();
 
@@ -242,7 +244,6 @@ app.get('/api/scheduler/token', (req, res) => {
   res.json({ token: SCHEDULER_TOKEN });
 });
 
-// Middleware for scheduler routes
 function requireSchedulerToken(req, res, next) {
   const token = req.headers['x-scheduler-token'];
   if (token !== SCHEDULER_TOKEN) return res.status(403).json({ error: 'Forbidden' });
@@ -252,7 +253,6 @@ function requireSchedulerToken(req, res, next) {
 // In-memory schedule store
 let schedules = [];
 
-// Persist schedules to disk so they survive server restarts
 const SCHEDULES_FILE = path.join(__dirname, '.schedules.json');
 
 function saveSchedules() {
@@ -319,8 +319,13 @@ app.patch('/api/scheduler/schedules/:id/toggle', requireSchedulerToken, (req, re
 
 // -- OpenRouter chat proxy -----------------------------------------------------
 app.post('/api/chat', async (req, res) => {
-  const apiKey = req.headers['x-openrouter-key'];
-  if (!apiKey) return res.status(401).json({ error: 'Provide x-openrouter-key header' });
+  const rawKey = req.headers['x-openrouter-key'];
+  if (!rawKey) return res.status(401).json({ error: 'Provide x-openrouter-key header' });
+
+  // Sanitize to ASCII-safe range — guards against non-Latin-1 chars that would
+  // throw a ByteString error in Node.js fetch when set as a header value.
+  const apiKey = sanitizeHeaderValue(rawKey);
+  if (!apiKey) return res.status(401).json({ error: 'API key contains only invalid characters. Re-enter it in settings.' });
 
   const { messages, model = 'meta-llama/llama-3.3-70b-instruct:free', stream = false } = req.body;
   if (!messages || !Array.isArray(messages)) return res.status(400).json({ error: 'messages[] required' });
@@ -379,8 +384,7 @@ app.post('/api/install', async (req, res) => {
   toolList.forEach(t => { toolArgs.push('--tool'); toolArgs.push(t); });
 
   const install = spawn('bash', ['scripts/install.sh',
-    '--agent', slug,
-    agentArg,
+    '--agent', agentArg,
     '--no-interactive',
     ...toolArgs,
   ]);
@@ -400,7 +404,10 @@ async function runSchedule(schedule) {
 
   let apiKey;
   try {
-    apiKey = decrypt(encryptedKey);
+    const decrypted = decrypt(encryptedKey);
+    // Sanitize the decrypted key before using it in HTTP headers
+    apiKey = sanitizeHeaderValue(decrypted);
+    if (!apiKey) throw new Error('API key empty after sanitization');
   } catch {
     broadcast({ type: 'schedule_error', scheduleId: id, error: 'Failed to decrypt API key' });
     return;
@@ -480,6 +487,7 @@ app.post('/api/openclaw/convert', (req, res) => {
 
 app.post('/api/openclaw/install', (req, res) => {
   res.json({ ok: true });
+  const repoRoot = __dirname;
   const install = spawn('bash', ['scripts/install.sh', '--tool', 'openclaw', '--no-interactive', '--path', path.join(repoRoot, '.openclaw/agency-agents')], {
     cwd: __dirname,
     stdio: ['ignore', 'pipe', 'pipe'],
