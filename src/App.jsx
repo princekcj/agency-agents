@@ -387,6 +387,10 @@ function AgentsView({
               onChange={e => setSearch(e.target.value)}
             />
           </div>
+          <div className="agents-chat-hint">
+            <MessageSquare size={12} />
+            Use the blue Chat button on any agent card.
+          </div>
           <button
             className={`voice-btn ${voice.listening ? 'listening' : ''}`}
             onClick={() => setShowVoice(true)}
