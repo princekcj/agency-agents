@@ -16,7 +16,6 @@ const LS_MDL = 'agency_openrouter_model';
 
 function sanitizeHeaderValue(value) {
   return String(value || '').replace(/[^\x20-\x7E]/g, '').trim();
-
 }
 
 function buildSystemPrompt(agent) {
@@ -62,17 +61,16 @@ export default function ChatPanel({ agent, onClose, initialContext }) {
   const [apiKey, setApiKey]     = useState(() => sanitizeHeaderValue(localStorage.getItem(LS_KEY) || ''));
   const [model, setModel]       = useState(() => localStorage.getItem(LS_MDL) || FREE_MODELS[0].id);
   const [messages, setMessages] = useState(() => {
-    // If opened with pipeline context, seed with it
     if (initialContext) {
       return [{ role: 'assistant', content: initialContext }];
     }
     return [];
   });
-  const [input, setInput]             = useState('');
-  const [loading, setLoading]         = useState(false);
+  const [input, setInput]               = useState('');
+  const [loading, setLoading]           = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [keyInput, setKeyInput]       = useState('');
-  const [error, setError]             = useState('');
+  const [keyInput, setKeyInput]         = useState('');
+  const [error, setError]               = useState('');
   const bottomRef = useRef(null);
   const inputRef  = useRef(null);
 
@@ -87,7 +85,6 @@ export default function ChatPanel({ agent, onClose, initialContext }) {
   }, [hasKey]);
 
   const saveKey = () => {
-
     const raw = keyInput.trim();
     const k = sanitizeHeaderValue(raw);
     if (!k) return;
@@ -99,20 +96,17 @@ export default function ChatPanel({ agent, onClose, initialContext }) {
   };
 
   const saveModel = (m) => { setModel(m); localStorage.setItem(LS_MDL, m); };
-
   const clearHistory = () => setMessages([]);
-
-  const exportChat = () => {
-    if (messages.length) downloadMarkdown(agent, messages);
-  };
+  const exportChat = () => { if (messages.length) downloadMarkdown(agent, messages); };
 
   const sendMessage = useCallback(async () => {
     const text = input.trim();
-    const cleanApiKey = sanitizeHeaderValue(apiKey);
-    if (!text || loading || !cleanApiKey) return;
-    if (cleanApiKey !== apiKey) {
-      localStorage.setItem(LS_KEY, cleanApiKey);
-      setApiKey(cleanApiKey);
+    const cleanKey = sanitizeHeaderValue(apiKey);
+    if (!text || loading || !cleanKey) return;
+
+    if (cleanKey !== apiKey) {
+      localStorage.setItem(LS_KEY, cleanKey);
+      setApiKey(cleanKey);
     }
 
     setInput('');
@@ -123,21 +117,8 @@ export default function ChatPanel({ agent, onClose, initialContext }) {
     setLoading(true);
 
     try {
-      const cleanKey = sanitizeHeaderValue(apiKey);
-      if (!cleanKey) {
-        setError('API key is empty or contains only invalid characters. Re-enter it in Settings.');
-        setLoading(false);
-        return;
-      }
-      // If stored key had bad chars, fix it silently going forward
-      if (cleanKey !== apiKey) {
-        localStorage.setItem(LS_KEY, cleanKey);
-        setApiKey(cleanKey);
-      }
-
       const res = await fetch('/api/chat', {
         method: 'POST',
-
         headers: { 'Content-Type': 'application/json', 'x-openrouter-key': cleanKey },
         body: JSON.stringify({
           model,
