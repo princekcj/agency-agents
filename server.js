@@ -223,6 +223,82 @@ app.get('/api/stats/24h', (req, res) => {
   res.json({ total: recent.length, byDivision, topAgents, byHour });
 });
 
+// ── Single-agent install — streams output via WebSocket ───────────────────────
+app.post('/api/install/agent', (req, res) => {
+  const { division, slug, tools: toolList } = req.body;
+  if (!division || !slug || !Array.isArray(toolList) || toolList.length === 0) {
+    return res.status(400).json({ error: 'division, slug, and tools[] required' });
+  }
+
+  res.json({ ok: true, message: `Installing ${slug} to ${toolList.join(', ')}` });
+  const repoRoot = __dirname;
+  const agentArg = `${division}/${slug}`;
+
+  broadcast({ type: 'install_start', tool: 'agent', agentId: agentArg });
+
+  const convert = spawn('bash', ['scripts/convert.sh'], { cwd: repoRoot, env: { ...process.env } });
+  convert.stdout.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
+  convert.stderr.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
+  convert.on('close', code => {
+    if (code !== 0) { broadcast({ type: 'install_error', text: `convert.sh exited ${code}` }); return; }
+    broadcast({ type: 'install_log', text: '\n[convert complete] Installing agent...\n' });
+
+    const toolArgs = [];
+    toolList.forEach(t => { toolArgs.push('--tool'); toolArgs.push(t); });
+
+    const install = spawn('bash', [
+      'scripts/install.sh',
+      '--agent', slug,
+      ...toolArgs,
+      '--no-interactive',
+    ], { cwd: repoRoot, env: { ...process.env } });
+
+    install.stdout.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
+    install.stderr.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
+    install.on('close', code2 => {
+      broadcast({ type: 'install_done', exitCode: code2, agentId: agentArg });
+    });
+  });
+});
+
+// ── OpenRouter chat proxy ──────────────────────────────────────────────────────
+app.post('/api/chat', async (req, res) => {
+  const apiKey = req.headers['x-openrouter-key'];
+  if (!apiKey) return res.status(401).json({ error: 'Provide x-openrouter-key header' });
+
+  const { messages, model = 'meta-llama/llama-3.3-70b-instruct:free', stream = false } = req.body;
+  if (!messages || !Array.isArray(messages)) return res.status(400).json({ error: 'messages[] required' });
+
+  try {
+    const upstream = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://the-agency.replit.app',
+        'X-Title': 'The Agency — Ultron Protocol',
+      },
+      body: JSON.stringify({ model, messages, stream }),
+    });
+
+    if (!upstream.ok) {
+      const err = await upstream.text();
+      return res.status(upstream.status).json({ error: err });
+    }
+
+    if (stream) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      upstream.body.pipe(res);
+    } else {
+      const data = await upstream.json();
+      res.json(data);
+    }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Run OpenClaw install — streams output via WebSocket
 app.post('/api/install/openclaw', (req, res) => {
   res.json({ ok: true, message: 'OpenClaw installation started. Watch the terminal panel.' });

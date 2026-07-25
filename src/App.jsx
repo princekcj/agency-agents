@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Search, Mic, MicOff, Volume2, VolumeX, Activity, Download, X, Eye, LayoutDashboard, Bot, ChevronRight, Zap } from 'lucide-react';
+import { Search, Mic, MicOff, Volume2, VolumeX, Activity, Download, X, Eye, LayoutDashboard, Bot, ChevronRight, Zap, MessageSquare, GitMerge, Rocket } from 'lucide-react';
 import { useWebSocket } from './hooks/useWebSocket.js';
 import { useVoice } from './hooks/useVoice.js';
 import JarvisBackground from './components/JarvisBackground.jsx';
 import UltronBootScreen from './components/UltronBootScreen.jsx';
+import DeployModal from './components/DeployModal.jsx';
+import ChatPanel from './components/ChatPanel.jsx';
+import PipelineBuilder from './components/PipelineBuilder.jsx';
 
 // ─── Minimal Markdown Renderer ────────────────────────────────────────────────
 function SimpleMarkdown({ content }) {
@@ -36,7 +39,7 @@ function SimpleMarkdown({ content }) {
 }
 
 // ─── Agent Card ────────────────────────────────────────────────────────────────
-function AgentCard({ agent, onSelect, onSpeak }) {
+function AgentCard({ agent, onSelect, onSpeak, onDeploy, onChat }) {
   return (
     <div
       className="agent-card"
@@ -54,19 +57,35 @@ function AgentCard({ agent, onSelect, onSpeak }) {
       </div>
       {agent.description && <div className="agent-desc">{agent.description}</div>}
       {agent.vibe && <div className="agent-vibe">"{agent.vibe}"</div>}
-      <button
-        className="agent-speak-btn"
-        onClick={(e) => { e.stopPropagation(); onSpeak(agent); }}
-        title="Have Ultron brief you on this agent"
-      >
-        <Volume2 size={10} /> Brief
-      </button>
+      <div className="agent-card-actions">
+        <button
+          className="agent-speak-btn"
+          onClick={(e) => { e.stopPropagation(); onSpeak(agent); }}
+          title="Have Ultron brief you on this agent"
+        >
+          <Volume2 size={10} /> Brief
+        </button>
+        <button
+          className="agent-chat-btn"
+          onClick={(e) => { e.stopPropagation(); onChat(agent); }}
+          title="Chat with this agent"
+        >
+          <MessageSquare size={10} /> Chat
+        </button>
+        <button
+          className="agent-deploy-btn"
+          onClick={(e) => { e.stopPropagation(); onDeploy(agent); }}
+          title="Deploy this agent to a tool"
+        >
+          <Rocket size={10} /> Deploy
+        </button>
+      </div>
     </div>
   );
 }
 
 // ─── Agent Detail Modal ────────────────────────────────────────────────────────
-function AgentDetail({ agent, onClose, onSpeak }) {
+function AgentDetail({ agent, onClose, onSpeak, onDeploy, onChat }) {
   if (!agent) return null;
   return (
     <div className="detail-overlay" onClick={onClose}>
@@ -85,8 +104,14 @@ function AgentDetail({ agent, onClose, onSpeak }) {
           </div>
         </div>
         <div className="detail-actions">
+          <button className="detail-action-btn btn-chat" onClick={() => { onClose(); onChat(agent); }}>
+            <MessageSquare size={12} /> Chat
+          </button>
+          <button className="detail-action-btn btn-deploy" onClick={() => { onClose(); onDeploy(agent); }}>
+            <Rocket size={12} /> Deploy
+          </button>
           <button className="detail-action-btn btn-speak" onClick={() => onSpeak(agent)}>
-            <Volume2 size={12} /> Ultron Brief
+            <Volume2 size={12} /> Brief
           </button>
           <button className="detail-action-btn btn-close" onClick={onClose}>
             <X size={12} /> Close
@@ -304,6 +329,7 @@ function AgentsView({
   onSelectAgent, onSpeakAgent,
   termLogs, installing, onInstall,
   voice, showVoice, setShowVoice,
+  onDeployAgent, onChatAgent,
 }) {
   const termRef = useRef(null);
   useEffect(() => {
@@ -382,6 +408,8 @@ function AgentsView({
               agent={agent}
               onSelect={onSelectAgent}
               onSpeak={onSpeakAgent}
+              onDeploy={onDeployAgent}
+              onChat={onChatAgent}
             />
           ))}
         </div>
@@ -442,7 +470,7 @@ const ACTIVITY_QUIPS = [
 export default function App() {
   const [bootDone, setBootDone] = useState(false);
   const [dataReady, setDataReady] = useState(false);
-  const [view, setView] = useState('dashboard'); // 'dashboard' | 'agents'
+  const [view, setView] = useState('dashboard'); // 'dashboard' | 'agents' | 'pipeline'
   const [agents, setAgents] = useState([]);
   const [divisions, setDivisions] = useState([]);
   const [stats, setStats] = useState({ total: 0, divisions: 0 });
@@ -450,6 +478,8 @@ export default function App() {
   const [search, setSearch] = useState('');
   const [activeDivision, setActiveDivision] = useState(null);
   const [selectedAgent, setSelectedAgent] = useState(null);
+  const [deployAgent, setDeployAgent] = useState(null);
+  const [chatAgent, setChatAgent] = useState(null);
   const [activities, setActivities] = useState([]);
   const [termLogs, setTermLogs] = useState([]);
   const [installing, setInstalling] = useState(false);
@@ -552,6 +582,16 @@ export default function App() {
     trackActivity(agent, 'Briefed');
   }, [voice, trackActivity]);
 
+  const handleDeployAgent = useCallback((agent) => {
+    setDeployAgent(agent);
+    trackActivity(agent, 'Deploy initiated');
+  }, [trackActivity]);
+
+  const handleChatAgent = useCallback((agent) => {
+    setChatAgent(agent);
+    trackActivity(agent, 'Chat started');
+  }, [trackActivity]);
+
   const handleInstall = async () => {
     setInstalling(true);
     setTermLogs([]);
@@ -603,6 +643,13 @@ export default function App() {
                   <Bot size={12} />
                   Agents
                 </button>
+                <button
+                  className={`hud-nav-btn ${view === 'pipeline' ? 'active' : ''}`}
+                  onClick={() => setView('pipeline')}
+                >
+                  <GitMerge size={12} />
+                  Pipeline
+                </button>
               </nav>
 
               <div className="hud-header-right">
@@ -621,14 +668,15 @@ export default function App() {
             </header>
 
             {/* Content */}
-            {view === 'dashboard' ? (
+            {view === 'dashboard' && (
               <DashboardView
                 stats24h={stats24h}
                 activities={activities}
                 stats={stats}
                 onNavigateAgents={() => setView('agents')}
               />
-            ) : (
+            )}
+            {view === 'agents' && (
               <AgentsView
                 agents={agents}
                 divisions={divisions}
@@ -645,7 +693,14 @@ export default function App() {
                 voice={voice}
                 showVoice={showVoice}
                 setShowVoice={setShowVoice}
+                onDeployAgent={handleDeployAgent}
+                onChatAgent={handleChatAgent}
               />
+            )}
+            {view === 'pipeline' && (
+              <div className="pipeline-view">
+                <PipelineBuilder agents={agents} />
+              </div>
             )}
           </div>
 
@@ -654,7 +709,25 @@ export default function App() {
               agent={selectedAgent}
               onClose={() => setSelectedAgent(null)}
               onSpeak={handleSpeakAgent}
+              onDeploy={handleDeployAgent}
+              onChat={handleChatAgent}
             />
+          )}
+
+          {deployAgent && (
+            <DeployModal
+              agent={deployAgent}
+              onClose={() => setDeployAgent(null)}
+            />
+          )}
+
+          {chatAgent && (
+            <div className="chat-overlay">
+              <ChatPanel
+                agent={chatAgent}
+                onClose={() => setChatAgent(null)}
+              />
+            </div>
           )}
 
           {showVoice && (
