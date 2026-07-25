@@ -3,6 +3,12 @@ import { Plus, X, Play, Loader, Settings, Key, ArrowDown, Bot, Download, Message
 
 const LS_KEY = 'agency_openrouter_key';
 const LS_MDL = 'agency_openrouter_model';
+const LS_SCHEDULER_TOKEN = 'agency_scheduler_token';
+const LS_PIPELINES = 'agency_saved_pipelines';
+
+function sanitizeHeaderValue(value) {
+  return String(value || '').replace(/[^\x20-\x7E]/g, '').trim();
+}
 
 const FREE_MODELS = [
   { id: 'meta-llama/llama-3.3-70b-instruct:free',   label: 'Llama 3.3 70B' },
@@ -22,10 +28,26 @@ Your full specification:
 ${agent.content}`;
 }
 
-function callAgent(agent, messages, apiKey, model) {
+function loadSavedPipelines() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LS_PIPELINES) || '[]');
+    return Array.isArray(saved) ? saved : [];
+  } catch {
+    return [];
+  }
+}
+
+function callAgent(agent, messages, apiKey, model, schedulerToken = '') {
+  const headers = {
+    'Content-Type': 'application/json',
+    'x-openrouter-key': sanitizeHeaderValue(apiKey),
+  };
+  const cleanSchedulerToken = sanitizeHeaderValue(schedulerToken);
+  if (cleanSchedulerToken) headers['x-scheduler-token'] = cleanSchedulerToken;
+
   return fetch('/api/chat', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-openrouter-key': apiKey },
+    headers,
     body: JSON.stringify({
       model,
       stream: false,
@@ -70,12 +92,17 @@ function downloadPipelineResults(pipeline, results, input) {
 
 export default function PipelineBuilder({ agents }) {
   const [pipeline, setPipeline]       = useState([]);
+  const [savedPipelines, setSavedPipelines] = useState(() => loadSavedPipelines());
+  const [activePipelineId, setActivePipelineId] = useState('');
+  const [pipelineName, setPipelineName] = useState('Untitled pipeline');
   const [input, setInput]             = useState('');
   const [running, setRunning]         = useState(false);
   const [results, setResults]         = useState([]);
   const [showSettings, setShowSettings] = useState(false);
-  const [apiKey, setApiKey]           = useState(() => localStorage.getItem(LS_KEY) || '');
+  const [apiKey, setApiKey]           = useState(() => sanitizeHeaderValue(localStorage.getItem(LS_KEY) || ''));
   const [keyInput, setKeyInput]       = useState('');
+  const [schedulerToken, setSchedulerToken] = useState(() => sanitizeHeaderValue(localStorage.getItem(LS_SCHEDULER_TOKEN) || ''));
+  const [schedulerTokenInput, setSchedulerTokenInput] = useState('');
   const [model, setModel]             = useState(() => localStorage.getItem(LS_MDL) || FREE_MODELS[0].id);
   const [searchQ, setSearchQ]         = useState('');
   const [showPicker, setShowPicker]   = useState(false);
@@ -97,14 +124,64 @@ export default function PipelineBuilder({ agents }) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [results, chatMessages, chatLoading]);
 
-  const saveKey  = () => { const k = keyInput.trim(); if (!k) return; localStorage.setItem(LS_KEY, k); setApiKey(k); setKeyInput(''); setShowSettings(false); };
+  useEffect(() => {
+    localStorage.setItem(LS_PIPELINES, JSON.stringify(savedPipelines));
+  }, [savedPipelines]);
+
+  const saveKey  = () => { const k = sanitizeHeaderValue(keyInput); if (!k) return; localStorage.setItem(LS_KEY, k); setApiKey(k); setKeyInput(''); setShowSettings(false); };
+  const saveSchedulerToken = () => {
+    const token = sanitizeHeaderValue(schedulerTokenInput);
+    localStorage.setItem(LS_SCHEDULER_TOKEN, token);
+    setSchedulerToken(token);
+    setSchedulerTokenInput('');
+  };
   const saveModel = (m) => { setModel(m); localStorage.setItem(LS_MDL, m); };
 
   const addAgent    = (agent) => { setPipeline(p => [...p, agent]); setShowPicker(false); setSearchQ(''); };
   const removeAgent = (idx)  => setPipeline(p => p.filter((_, i) => i !== idx));
+  const newPipeline = () => {
+    setPipeline([]);
+    setInput('');
+    setResults([]);
+    setChatMessages([]);
+    setActivePipelineId('');
+    setPipelineName('Untitled pipeline');
+  };
+  const saveCurrentPipeline = () => {
+    if (!pipeline.length) return;
+    const id = activePipelineId || `pipeline-${Date.now()}`;
+    const record = {
+      id,
+      name: pipelineName.trim() || 'Untitled pipeline',
+      agentIds: pipeline.map(agent => agent.id),
+      input,
+      updatedAt: new Date().toISOString(),
+    };
+    setSavedPipelines(items => [record, ...items.filter(item => item.id !== id)]);
+    setActivePipelineId(id);
+  };
+  const loadPipeline = (id) => {
+    const saved = savedPipelines.find(item => item.id === id);
+    if (!saved) return;
+    setActivePipelineId(saved.id);
+    setPipelineName(saved.name);
+    setPipeline(saved.agentIds.map(agentId => agents.find(agent => agent.id === agentId)).filter(Boolean));
+    setInput(saved.input || '');
+    setResults([]);
+    setChatMessages([]);
+    setChatError('');
+  };
+  const deletePipeline = (id) => {
+    setSavedPipelines(items => items.filter(item => item.id !== id));
+    if (activePipelineId === id) newPipeline();
+  };
 
   const runPipeline = useCallback(async () => {
-    if (!pipeline.length || !input.trim() || !apiKey) return;
+    const cleanApiKey = sanitizeHeaderValue(apiKey);
+    const cleanSchedulerToken = sanitizeHeaderValue(schedulerToken);
+    if (!pipeline.length || !input.trim() || !cleanApiKey) return;
+    if (cleanApiKey !== apiKey) { localStorage.setItem(LS_KEY, cleanApiKey); setApiKey(cleanApiKey); }
+    if (cleanSchedulerToken !== schedulerToken) { localStorage.setItem(LS_SCHEDULER_TOKEN, cleanSchedulerToken); setSchedulerToken(cleanSchedulerToken); }
     setRunning(true);
     setResults([]);
     setChatMessages([]);
@@ -121,7 +198,7 @@ export default function PipelineBuilder({ agents }) {
           ? currentInput
           : `Previous agent output:\n\n${currentInput}\n\nContinue processing this according to your role.`;
 
-        const data = await callAgent(agent, [{ role: 'user', content: userContent }], apiKey, model);
+        const data = await callAgent(agent, [{ role: 'user', content: userContent }], cleanApiKey, model, cleanSchedulerToken);
         if (data.error) throw new Error(data.error);
 
         const output = data.choices?.[0]?.message?.content || '(no output)';
@@ -134,12 +211,16 @@ export default function PipelineBuilder({ agents }) {
     }
 
     setRunning(false);
-  }, [pipeline, input, apiKey, model]);
+  }, [pipeline, input, apiKey, model, schedulerToken]);
 
   // Continue chatting with the final agent, with pipeline context
   const sendChatMessage = useCallback(async () => {
     const text = chatInput.trim();
-    if (!text || chatLoading || !apiKey || !lastAgent) return;
+    const cleanApiKey = sanitizeHeaderValue(apiKey);
+    const cleanSchedulerToken = sanitizeHeaderValue(schedulerToken);
+    if (!text || chatLoading || !cleanApiKey || !lastAgent) return;
+    if (cleanApiKey !== apiKey) { localStorage.setItem(LS_KEY, cleanApiKey); setApiKey(cleanApiKey); }
+    if (cleanSchedulerToken !== schedulerToken) { localStorage.setItem(LS_SCHEDULER_TOKEN, cleanSchedulerToken); setSchedulerToken(cleanSchedulerToken); }
     setChatInput('');
     setChatError('');
 
@@ -158,9 +239,11 @@ export default function PipelineBuilder({ agents }) {
       `\n\n---\n\nFULL PIPELINE OUTPUT (from previous agents in this session):\n\n${pipelineContext}`;
 
     try {
+      const headers = { 'Content-Type': 'application/json', 'x-openrouter-key': cleanApiKey };
+      if (cleanSchedulerToken) headers['x-scheduler-token'] = cleanSchedulerToken;
       const res = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-openrouter-key': apiKey },
+        headers,
         body: JSON.stringify({
           model,
           stream: false,
@@ -181,7 +264,7 @@ export default function PipelineBuilder({ agents }) {
     } finally {
       setChatLoading(false);
     }
-  }, [chatInput, chatLoading, apiKey, model, chatMessages, lastAgent, results]);
+  }, [chatInput, chatLoading, apiKey, model, chatMessages, lastAgent, results, schedulerToken]);
 
   const onChatKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
@@ -216,6 +299,14 @@ export default function PipelineBuilder({ agents }) {
                 onKeyDown={e => e.key === 'Enter' && saveKey()} />
               <button className="chat-save-btn" onClick={saveKey}>Save</button>
             </div>
+            <div className="chat-settings-row" style={{ marginTop: 8 }}><Key size={11} /><span>Scheduler Token</span></div>
+            <div className="chat-settings-keyrow">
+              <input className="chat-key-input" type="password"
+                placeholder={schedulerToken ? '••••••••••••••••' : 'Optional scheduler auth token'}
+                value={schedulerTokenInput} onChange={e => setSchedulerTokenInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && saveSchedulerToken()} />
+              <button className="chat-save-btn" onClick={saveSchedulerToken}>Save</button>
+            </div>
             <div className="chat-settings-row" style={{ marginTop: 8 }}><Bot size={11} /><span>Model</span></div>
             <div className="chat-model-list">
               {FREE_MODELS.map(m => (
@@ -226,6 +317,41 @@ export default function PipelineBuilder({ agents }) {
             </div>
           </div>
         )}
+
+        <div className="pipeline-manager">
+          <div className="pipeline-settings-keyrow">
+            <input
+              className="pipeline-search"
+              placeholder="Pipeline name"
+              value={pipelineName}
+              onChange={e => setPipelineName(e.target.value)}
+            />
+          </div>
+          <div className="pipeline-run-row">
+            <button className="pipeline-export-btn" onClick={saveCurrentPipeline} disabled={!pipeline.length}>
+              Save Pipeline
+            </button>
+            <button className="pipeline-export-btn" onClick={newPipeline}>
+              New
+            </button>
+          </div>
+          {savedPipelines.length > 0 && (
+            <div className="pipeline-picker-list" style={{ maxHeight: 150, marginTop: 8 }}>
+              {savedPipelines.map(saved => (
+                <div key={saved.id} className={`pipeline-pick-item ${activePipelineId === saved.id ? 'active' : ''}`}>
+                  <button className="pipeline-saved-load" onClick={() => loadPipeline(saved.id)}>
+                    <span>{saved.agentIds.length}</span>
+                    <div>
+                      <div className="pipeline-pick-name">{saved.name}</div>
+                      <div className="pipeline-pick-div">{saved.agentIds.length} agent{saved.agentIds.length !== 1 ? 's' : ''}</div>
+                    </div>
+                  </button>
+                  <button className="pipeline-remove-btn" onClick={() => deletePipeline(saved.id)}><X size={11} /></button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div className="pipeline-stages">
           {pipeline.length === 0 && (

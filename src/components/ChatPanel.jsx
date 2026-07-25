@@ -14,6 +14,10 @@ const FREE_MODELS = [
 const LS_KEY = 'agency_openrouter_key';
 const LS_MDL = 'agency_openrouter_model';
 
+function sanitizeHeaderValue(value) {
+  return String(value || '').replace(/[^\x20-\x7E]/g, '').trim();
+}
+
 function buildSystemPrompt(agent) {
   return `You are ${agent.name}, a specialized AI agent in The Agency.
 Division: ${agent.divisionLabel}
@@ -54,7 +58,7 @@ function downloadMarkdown(agent, messages) {
 }
 
 export default function ChatPanel({ agent, onClose, initialContext }) {
-  const [apiKey, setApiKey]     = useState(() => localStorage.getItem(LS_KEY) || '');
+  const [apiKey, setApiKey]     = useState(() => sanitizeHeaderValue(localStorage.getItem(LS_KEY) || ''));
   const [model, setModel]       = useState(() => localStorage.getItem(LS_MDL) || FREE_MODELS[0].id);
   const [messages, setMessages] = useState(() => {
     // If opened with pipeline context, seed with it
@@ -82,7 +86,7 @@ export default function ChatPanel({ agent, onClose, initialContext }) {
   }, [hasKey]);
 
   const saveKey = () => {
-    const k = keyInput.trim();
+    const k = sanitizeHeaderValue(keyInput);
     if (!k) return;
     localStorage.setItem(LS_KEY, k);
     setApiKey(k);
@@ -100,7 +104,12 @@ export default function ChatPanel({ agent, onClose, initialContext }) {
 
   const sendMessage = useCallback(async () => {
     const text = input.trim();
-    if (!text || loading || !apiKey) return;
+    const cleanApiKey = sanitizeHeaderValue(apiKey);
+    if (!text || loading || !cleanApiKey) return;
+    if (cleanApiKey !== apiKey) {
+      localStorage.setItem(LS_KEY, cleanApiKey);
+      setApiKey(cleanApiKey);
+    }
 
     setInput('');
     setError('');
@@ -112,7 +121,7 @@ export default function ChatPanel({ agent, onClose, initialContext }) {
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-openrouter-key': apiKey },
+        headers: { 'Content-Type': 'application/json', 'x-openrouter-key': cleanApiKey },
         body: JSON.stringify({
           model,
           stream: false,
