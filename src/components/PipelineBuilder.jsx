@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Plus, X, Play, Loader, Settings, Key, ArrowDown, Bot, Download, MessageSquare, Send, User, Clock, Trash2, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
+import { Plus, X, Play, Loader, Settings, Key, ArrowDown, Bot, Download, MessageSquare, Send, User, Clock, Trash2, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, RefreshCw, AlertTriangle } from 'lucide-react';
+import ErrorBanner from './ErrorBanner.jsx';
 
 const LS_KEY = 'agency_openrouter_key';
 const LS_MDL = 'agency_openrouter_model';
@@ -398,6 +399,7 @@ export default function PipelineBuilder({ agents }) {
   const [chatInput, setChatInput]       = useState('');
   const [chatLoading, setChatLoading]   = useState(false);
   const [chatError, setChatError]       = useState('');
+  const [chatErrorCode, setChatErrorCode] = useState('');
 
   const bottomRef    = useRef(null);
   const chatInputRef = useRef(null);
@@ -509,6 +511,7 @@ export default function PipelineBuilder({ agents }) {
     if (cleanSchedulerToken !== schedulerToken) { localStorage.setItem(LS_SCHEDULER_TOKEN, cleanSchedulerToken); setSchedulerToken(cleanSchedulerToken); }
     setChatInput('');
     setChatError('');
+    setChatErrorCode('');
 
     const pipelineContext = results
       .filter(r => r.status === 'done')
@@ -537,15 +540,15 @@ export default function PipelineBuilder({ agents }) {
       });
       const data = await res.json();
       if (!res.ok) {
-        if (res.status === 401) setChatError('Invalid API key.');
-        else if (res.status === 429) setChatError('Rate limit. Try another model.');
-        else setChatError(data.error || `Error ${res.status}`);
+        setChatError(data.error || `Error ${res.status}`);
+        setChatErrorCode(data.code || '');
       } else {
         const reply = data.choices?.[0]?.message?.content || '(no response)';
         setChatMessages([...history, { role: 'assistant', content: reply }]);
       }
     } catch (e) {
       setChatError(e.message);
+      setChatErrorCode('NETWORK_ERROR');
     } finally {
       setChatLoading(false);
     }
@@ -762,7 +765,7 @@ export default function PipelineBuilder({ agents }) {
                 {(step.output || step.status === 'error') && (
                   <div className="pipeline-result-body">
                     {step.status === 'error'
-                      ? <span style={{ color: '#f87171' }}>⚠ {step.output}</span>
+                      ? <ErrorBanner msg={step.output} compact />
                       : step.output}
                   </div>
                 )}
@@ -806,7 +809,13 @@ export default function PipelineBuilder({ agents }) {
                   </div>
                 </div>
               )}
-              {chatError && <div className="chat-error">⚠ {chatError}</div>}
+              {chatError && (
+                <ErrorBanner
+                  msg={chatError}
+                  code={chatErrorCode}
+                  onOpenSettings={() => setShowSettings(true)}
+                />
+              )}
               <div ref={bottomRef} />
             </div>
 

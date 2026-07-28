@@ -2335,6 +2335,116 @@ body {
   padding: 8px 12px;
 }
 
+/* ============================================
+   ERROR BANNER — contextual OpenRouter errors
+   ============================================ */
+.error-banner {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-width: 1px;
+  border-style: solid;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 4px 0;
+}
+.error-banner.compact {
+  padding: 6px 10px;
+  gap: 7px;
+}
+
+/* Auth variant — amber */
+.error-banner--auth {
+  background: rgba(245, 158, 11, 0.07);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #fbbf24;
+}
+.error-banner--auth .error-banner-icon { color: #f59e0b; margin-top: 1px; flex-shrink: 0; }
+
+/* Quota variant — blue */
+.error-banner--quota {
+  background: rgba(59, 130, 246, 0.07);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #93c5fd;
+}
+.error-banner--quota .error-banner-icon { color: #60a5fa; margin-top: 1px; flex-shrink: 0; }
+
+/* Generic variant — red */
+.error-banner--generic {
+  background: rgba(239, 68, 68, 0.07);
+  border-color: rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+}
+.error-banner--generic .error-banner-icon { color: #f87171; margin-top: 1px; flex-shrink: 0; }
+
+.error-banner-body { flex: 1; min-width: 0; }
+
+.error-banner-title {
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  margin-bottom: 3px;
+}
+.error-banner.compact .error-banner-title {
+  font-size: 10px;
+  margin-bottom: 0;
+}
+
+.error-banner-sub {
+  font-size: 10px;
+  opacity: 0.85;
+  margin-bottom: 6px;
+  line-height: 1.55;
+  font-family: var(--font-ui);
+}
+
+.error-banner-code {
+  font-family: var(--font-mono);
+  background: rgba(0,0,0,0.25);
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+
+.error-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+.error-banner.compact .error-banner-actions { margin-top: 4px; }
+
+.error-banner-btn {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: inherit;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 3px 9px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.error-banner-btn:hover {
+  background: rgba(255,255,255,0.14);
+  border-color: rgba(255,255,255,0.28);
+}
+
+.error-banner-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: inherit;
+  opacity: 0.75;
+  text-decoration: none;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+.error-banner-link:hover { opacity: 1; text-decoration: underline; }
+
 /* Input */
 .chat-input-row {
   display: flex;

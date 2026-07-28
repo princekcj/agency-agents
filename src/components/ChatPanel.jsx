@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { X, Send, Settings, Bot, User, Loader, Key, Trash2, Download } from 'lucide-react';
+import ErrorBanner from './ErrorBanner.jsx';
 
 const FREE_MODELS = [
   { id: 'meta-llama/llama-3.3-70b-instruct:free',   label: 'Llama 3.3 70B' },
@@ -71,6 +72,7 @@ export default function ChatPanel({ agent, onClose, initialContext }) {
   const [showSettings, setShowSettings] = useState(false);
   const [keyInput, setKeyInput]         = useState('');
   const [error, setError]               = useState('');
+  const [errorCode, setErrorCode]       = useState('');
   const bottomRef = useRef(null);
   const inputRef  = useRef(null);
 
@@ -111,6 +113,7 @@ export default function ChatPanel({ agent, onClose, initialContext }) {
 
     setInput('');
     setError('');
+    setErrorCode('');
     const userMsg = { role: 'user', content: text };
     const history = [...messages, userMsg];
     setMessages(history);
@@ -131,16 +134,15 @@ export default function ChatPanel({ agent, onClose, initialContext }) {
       });
       const data = await res.json();
       if (!res.ok) {
-        const status = res.status;
-        if (status === 401) setError('Invalid API key — check it at openrouter.ai/keys.');
-        else if (status === 429) setError('Rate limit reached. Try a different model or wait a moment.');
-        else setError(data.error || `Error ${status}`);
+        setError(data.error || `Error ${res.status}`);
+        setErrorCode(data.code || '');
       } else {
         const reply = data.choices?.[0]?.message?.content || '(no response)';
         setMessages([...history, { role: 'assistant', content: reply }]);
       }
     } catch (e) {
       setError(`Failed to send: ${e.message}`);
+      setErrorCode('NETWORK_ERROR');
     } finally {
       setLoading(false);
     }
@@ -252,7 +254,13 @@ export default function ChatPanel({ agent, onClose, initialContext }) {
                 </div>
               </div>
             )}
-            {error && <div className="chat-error">{error}</div>}
+            {error && (
+              <ErrorBanner
+                msg={error}
+                code={errorCode}
+                onOpenSettings={() => setShowSettings(true)}
+              />
+            )}
             <div ref={bottomRef} />
           </div>
 

@@ -349,7 +349,12 @@ app.post('/api/chat', async (req, res) => {
         const errJson = JSON.parse(errText);
         errMsg = errJson.error?.message || errJson.error || errJson.message || errText;
       } catch { /* keep raw text */ }
-      return res.status(upstream.status).json({ error: errMsg });
+      const status = upstream.status;
+      const code =
+        status === 401 ? 'AUTH_FAILED' :
+        status === 403 ? 'FORBIDDEN' :
+        status === 429 ? 'RATE_LIMITED' : 'UPSTREAM_ERROR';
+      return res.status(status).json({ error: errMsg, code });
     }
 
     if (stream) {
