@@ -1,0 +1,2 @@
+- [Responsive layout strategy](responsive-layout.md) — multi-column HUD layouts collapse via CSS-only breakpoints; no JS required.
+- [OpenRouter error handling](openrouter-errors.md) — server returns a `code` field alongside `error`; shared ErrorBanner component classifies auth/quota failures.
