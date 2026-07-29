@@ -492,14 +492,29 @@ app.post('/api/openclaw/convert', (req, res) => {
 
 app.post('/api/openclaw/install', (req, res) => {
   res.json({ ok: true });
-  const repoRoot = __dirname;
-  const install = spawn('bash', ['scripts/install.sh', '--tool', 'openclaw', '--no-interactive', '--path', path.join(repoRoot, '.openclaw/agency-agents')], {
+
+  // Always run convert first to ensure workspace files are fresh, then install.
+  broadcast({ type: 'install_log', text: '[openclaw] Generating workspaces...\n' });
+  const convert = spawn('bash', ['scripts/convert.sh', '--tool', 'openclaw'], {
     cwd: __dirname,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  install.stdout.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
-  install.stderr.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
-  install.on('close', code => broadcast({ type: 'install_done', exitCode: code }));
+  convert.stdout.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
+  convert.stderr.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
+  convert.on('close', convertCode => {
+    if (convertCode !== 0) {
+      broadcast({ type: 'install_done', exitCode: convertCode });
+      return;
+    }
+    broadcast({ type: 'install_log', text: '[openclaw] Installing agents...\n' });
+    const install = spawn('bash', ['scripts/install.sh', '--tool', 'openclaw', '--no-interactive'], {
+      cwd: __dirname,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    install.stdout.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
+    install.stderr.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
+    install.on('close', code => broadcast({ type: 'install_done', exitCode: code }));
+  });
 });
 
 const PORT = process.env.PORT || 3001;

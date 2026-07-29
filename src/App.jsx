@@ -599,7 +599,7 @@ export default function App() {
   const handleInstall = async () => {
     setInstalling(true);
     setTermLogs([]);
-    await fetch('/api/install/openclaw', { method: 'POST' });
+    await fetch('/api/openclaw/install', { method: 'POST' });
   };
 
   return (
