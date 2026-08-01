@@ -41,10 +41,10 @@ export default function DeployModal({ agent, onClose, onChat }) {
     if (!selected.length) return;
     setPhase('deploying');
     setLogs([`> Deploying ${agent.name} to: ${selected.join(', ')}\n`]);
-    await fetch('/api/install/agent', {
+    await fetch('/api/install', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ division: agent.division, slug: agent.slug, tools: selected }),
+      body: JSON.stringify({ agentId: `${agent.division}/${agent.slug}`, tools: selected }),
     });
   };
 

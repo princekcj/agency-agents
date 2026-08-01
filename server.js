@@ -438,7 +438,7 @@ app.post('/api/install/agent', async (req, res) => {
 
 // -- Single-agent install - streams output via WebSocket -----------------------
 app.post('/api/install', async (req, res) => {
-  const { agentId } = req.body;
+  const { agentId, tools } = req.body;
   if (!agentId) return res.status(400).json({ error: 'agentId required' });
 
   res.json({ ok: true });
@@ -449,7 +449,8 @@ app.post('/api/install', async (req, res) => {
 
   broadcast({ type: 'install_start', agentId });
   const agentArg = `${agent.division}/${agent.slug}`;
-  const toolList = ['npm', 'git', 'node', 'python'];
+  // Use caller-supplied tools; fall back to claude-code if none provided
+  const toolList = Array.isArray(tools) && tools.length ? tools : ['claude-code'];
 
   const toolArgs = [];
   toolList.forEach(t => { toolArgs.push('--tool'); toolArgs.push(t); });

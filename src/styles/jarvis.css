@@ -1070,7 +1070,12 @@ body {
   text-align: center;
   gap: 0;
   max-width: 560px;
+  width: 100%;
   padding: 0 20px;
+  /* Fixed height prevents the eye/title from shifting up as speech segments appear */
+  height: min(82vh, 620px);
+  justify-content: flex-start;
+  padding-top: min(10vh, 80px);
 }
 
 /* ── Ultron Eye ── */
