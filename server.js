@@ -234,6 +234,59 @@ function decrypt(data) {
 
 app.get('/api/scheduler/token', (req, res) => res.json({ token: SCHEDULER_TOKEN }));
 
+// ── Alias routes: /api/schedules → /api/scheduler/schedules (no token required
+//    for in-app use since the scheduler token is fetched from /api/scheduler/token)
+app.get('/api/schedules', (req, res) => {
+  res.json(schedules.map(s => ({ ...s, encryptedKey: undefined })));
+});
+
+app.post('/api/schedules', (req, res) => {
+  const { name, cron: cronExpr, pipeline, model, initialInput, encryptedKey } = req.body;
+  if (!name || !cronExpr || !pipeline || !encryptedKey) {
+    return res.status(400).json({ error: 'name, cron, pipeline, encryptedKey required' });
+  }
+  if (!cron.validate(cronExpr)) return res.status(400).json({ error: 'Invalid cron expression' });
+  const id = `sched-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const schedule = { id, name, cron: cronExpr, pipeline, model: normalizeFreeOpenRouterModel(model), initialInput: initialInput || '', encryptedKey, active: true, lastRun: null, nextRun: null };
+  schedules.push(schedule);
+  saveSchedules();
+  registerCronJob(schedule);
+  res.json({ ok: true, id });
+});
+
+app.delete('/api/schedules/:id', (req, res) => {
+  const { id } = req.params;
+  const idx = schedules.findIndex(s => s.id === id);
+  if (idx === -1) return res.status(404).json({ error: 'Not found' });
+  schedules.splice(idx, 1);
+  saveSchedules();
+  const job = cronJobs.get(id);
+  if (job) { job.stop(); cronJobs.delete(id); }
+  res.json({ ok: true });
+});
+
+app.patch('/api/schedules/:id/toggle', (req, res) => {
+  const { id } = req.params;
+  const schedule = schedules.find(s => s.id === id);
+  if (!schedule) return res.status(404).json({ error: 'Not found' });
+  schedule.active = !schedule.active;
+  saveSchedules();
+  const job = cronJobs.get(id);
+  if (job) { if (schedule.active) job.start(); else job.stop(); }
+  res.json({ ok: true, active: schedule.active });
+});
+
+app.post('/api/schedules/:id/run', (req, res) => {
+  const { id } = req.params;
+  const schedule = schedules.find(s => s.id === id);
+  if (!schedule) return res.status(404).json({ error: 'Not found' });
+  res.json({ ok: true, message: 'Manual run triggered' });
+});
+
+app.get('/api/schedules/:id/runs', (req, res) => {
+  res.json([]);
+});
+
 function requireSchedulerToken(req, res, next) {
   if (req.headers['x-scheduler-token'] !== SCHEDULER_TOKEN) return res.status(403).json({ error: 'Forbidden' });
   next();

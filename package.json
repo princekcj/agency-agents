@@ -8,6 +8,7 @@
     "start": "node server.js"
   },
   "dependencies": {
+    "3d-force-graph": "^1.80.0",
     "concurrently": "^9.0.1",
     "cors": "^2.8.5",
     "express": "^4.19.2",

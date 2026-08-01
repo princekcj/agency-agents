@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Search, Mic, MicOff, Volume2, VolumeX, Activity, Download, X, Eye, LayoutDashboard, Bot, ChevronRight, Zap, MessageSquare, GitMerge, Rocket } from 'lucide-react';
+import { Search, Mic, MicOff, Volume2, VolumeX, Activity, Download, X, Eye, LayoutDashboard, Bot, ChevronRight, Zap, MessageSquare, GitMerge, Rocket, Network } from 'lucide-react';
 import { useWebSocket } from './hooks/useWebSocket.js';
 import { useVoice } from './hooks/useVoice.js';
 import JarvisBackground from './components/JarvisBackground.jsx';
@@ -7,6 +7,7 @@ import UltronBootScreen from './components/UltronBootScreen.jsx';
 import DeployModal from './components/DeployModal.jsx';
 import ChatPanel from './components/ChatPanel.jsx';
 import PipelineBuilder from './components/PipelineBuilder.jsx';
+import ConstellationView from './components/ConstellationView.jsx';
 
 // ─── Minimal Markdown Renderer ────────────────────────────────────────────────
 function SimpleMarkdown({ content }) {
@@ -466,7 +467,8 @@ const ACTIVITY_QUIPS = [
 export default function App() {
   const [bootDone, setBootDone] = useState(false);
   const [dataReady, setDataReady] = useState(false);
-  const [view, setView] = useState('dashboard');
+
+  const [view, setView] = useState('dashboard'); // 'dashboard' | 'agents' | 'pipeline' | 'constellation'
   const [agents, setAgents] = useState([]);
   const [divisions, setDivisions] = useState([]);
   const [stats, setStats] = useState({ total: 0, divisions: 0 });
@@ -659,6 +661,13 @@ export default function App() {
                   <GitMerge size={12} />
                   Pipeline
                 </button>
+                <button
+                  className={`hud-nav-btn ${view === 'constellation' ? 'active' : ''}`}
+                  onClick={() => setView('constellation')}
+                >
+                  <Network size={12} />
+                  Constellation
+                </button>
               </nav>
 
               <div className="hud-header-right">
@@ -710,6 +719,12 @@ export default function App() {
               <div className="pipeline-view">
                 <PipelineBuilder agents={agents} />
               </div>
+            )}
+            {view === 'constellation' && (
+              <ConstellationView
+                agents={agents}
+                onSelectAgent={handleSelectAgent}
+              />
             )}
           </div>
 
