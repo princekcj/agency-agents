@@ -1,5 +1,5 @@
 /* ─────────────────────────────────────────────────────────────────────────
-   BOOT / GREETING SCREEN ANIMATION FIX
+   BOOT SCREEN ANIMATION FIX
    Replaces expensive paint/layout triggers with GPU-composited
    transform + opacity-only animations.
    ───────────────────────────────────────────────────────────────────────── */
@@ -103,15 +103,5 @@
    a full repaint of the panel.                                               */
 
 .boot-log-line {
-  will-change: opacity, transform;
-}
-
-/* ── Greeting overlay ───────────────────────────────────────────────────────
-   Remove backdrop-filter for the same reason as the boot screen.            */
-.greeting-overlay {
-  backdrop-filter: none;
-}
-
-.greeting-line {
   will-change: opacity, transform;
 }
