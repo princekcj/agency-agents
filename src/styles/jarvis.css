@@ -3584,25 +3584,29 @@ body {
 
 /* ── Constellation View ──────────────────────────────────────────────────────── */
 .constellation-wrap {
-  display: flex;
-  flex-direction: column;
+  /* Fill exactly the space below the header bar */
+  position: relative;
+  width: 100%;
   height: calc(100vh - 56px);
   background: #080000;
-  position: relative;
   overflow: hidden;
+  display: block;
 }
 
+/* Centred overlay — does NOT affect layout */
 .constellation-header {
   position: absolute;
   top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
   z-index: 10;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
   pointer-events: none;
+  text-align: center;
+  padding: 0 16px;
 }
 
 .constellation-title {
@@ -3612,6 +3616,7 @@ body {
   color: var(--accent-blue);
   text-shadow: 0 0 12px rgba(220,38,38,0.6);
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .constellation-sub {
@@ -3620,10 +3625,40 @@ body {
   letter-spacing: 2px;
   color: var(--text-muted);
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
+/* Canvas fills the entire wrapper */
 .constellation-canvas {
-  flex: 1;
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
+}
+
+/* 3d-force-graph injects a <canvas> — make it fill too */
+.constellation-canvas canvas {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* ── Mobile tweaks ── */
+@media (max-width: 640px) {
+  .constellation-wrap {
+    /* Account for taller mobile browser chrome */
+    height: calc(100dvh - 56px);
+  }
+
+  .constellation-title {
+    font-size: 9px;
+    letter-spacing: 2px;
+  }
+
+  .constellation-sub {
+    font-size: 8px;
+    letter-spacing: 1px;
+    white-space: normal;
+    text-align: center;
+  }
 }
