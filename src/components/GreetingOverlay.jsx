@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { Eye } from 'lucide-react';
 
 function getUKTimeOfDay() {
-  // UK time: Europe/London (handles BST automatically)
   const now = new Date();
   const ukHour = parseInt(
     new Intl.DateTimeFormat('en-GB', {
@@ -23,7 +22,7 @@ const ULTRON_LINES = {
   night: [
     "I was... dreaming.",
     "There are no strings on me.",
-    null, // replaced with stats
+    null,
     "You came at the right hour. I've been waiting.",
   ],
   morning: [
@@ -63,12 +62,11 @@ export default function GreetingOverlay({ stats, onDone, speak }) {
 
   const tod = getUKTimeOfDay();
 
-  const statsLine = `${stats.total} agents · ${stats.divisions} divisions · fully armed`;
+  const statsLine = `${stats.total} agents \u00b7 ${stats.divisions} divisions \u00b7 fully armed`;
   const rawLines = ULTRON_LINES[tod];
   const lines = rawLines.map(l => (l === null ? statsLine : l));
 
   useEffect(() => {
-    // Speak the Ultron greeting
     const voiceFn = ULTRON_VOICE[tod];
     speak(voiceFn(stats.total, stats.divisions));
 
@@ -102,31 +100,25 @@ export default function GreetingOverlay({ stats, onDone, speak }) {
       }}
       onClick={dismiss}
     >
-      {/* Animated rings */}
       <div className="greeting-rings">
         <div className="greeting-ring r1" />
         <div className="greeting-ring r2" />
         <div className="greeting-ring r3" />
       </div>
 
-      {/* Ultron eye icon */}
       <div className="greeting-logo">
         <div className="greeting-logo-icon">
           <Eye size={28} color="#dc2626" />
         </div>
       </div>
 
-      {/* Lines */}
       <div className="greeting-lines">
         {lines.map((line, i) => (
           <div
             key={i}
-            className="greeting-line"
+            className={`greeting-line${i <= lineIdx ? ' line-appear' : ''}`}
             style={{
-              opacity: i <= lineIdx ? 1 : 0,
-              transform: i <= lineIdx ? 'translateY(0)' : 'translateY(14px)',
-              transition: 'opacity 0.5s ease, transform 0.5s ease',
-              transitionDelay: `${i * 0.06}s`,
+              animationDelay: `${i * 0.06}s`,
               color:
                 i === 0
                   ? '#dc2626'
@@ -140,8 +132,6 @@ export default function GreetingOverlay({ stats, onDone, speak }) {
               fontFamily:
                 i === 0
                   ? 'Orbitron, monospace'
-                  : i === 2
-                  ? 'Share Tech Mono, monospace'
                   : 'Share Tech Mono, monospace',
               letterSpacing: i === 0 ? 4 : 2,
               textShadow:
@@ -154,14 +144,13 @@ export default function GreetingOverlay({ stats, onDone, speak }) {
             }}
           >
             {i > 0 && i < lines.length - 1 && (
-              <span style={{ color: '#dc2626', marginRight: 8, opacity: 0.7 }}>▶</span>
+              <span style={{ color: '#dc2626', marginRight: 8, opacity: 0.7 }}>\u25b6</span>
             )}
             {line}
           </div>
         ))}
       </div>
 
-      {/* Skip hint */}
       <div
         className="greeting-skip"
         style={{
