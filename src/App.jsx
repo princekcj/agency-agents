@@ -521,7 +521,16 @@ export default function App() {
 
   // Refresh 24h stats whenever activities change
   const refresh24h = useCallback(() => {
-    fetch('/api/stats/24h').then(r => r.json()).then(setStats24h).catch(() => {});
+    fetch('/api/stats/24h').then(r => r.json()).then(s24h => {
+      setDivisions(div => {
+        const byDivisionArray = Object.entries(s24h.byDivision || {}).map(([divId, count]) => {
+          const info = div.find(d => d.id === divId) || {};
+          return { id: divId, label: info.label || divId, color: info.color || '#dc2626', count };
+        }).sort((a, b) => b.count - a.count);
+        setStats24h({ ...s24h, byDivision: byDivisionArray });
+        return div; // don't change divisions
+      });
+    }).catch(() => {});
   }, []);
 
   const { connected } = useWebSocket(useCallback((msg) => {
@@ -567,7 +576,12 @@ export default function App() {
       setDivisions(div);
       setStats(st);
       setActivities(acts);
-      setStats24h(s24h);
+      // API returns byDivision as { divId: count }; UI expects an array with label/color
+      const byDivisionArray = Object.entries(s24h.byDivision || {}).map(([divId, count]) => {
+        const info = div.find(d => d.id === divId) || {};
+        return { id: divId, label: info.label || divId, color: info.color || '#dc2626', count };
+      }).sort((a, b) => b.count - a.count);
+      setStats24h({ ...s24h, byDivision: byDivisionArray });
       setDataReady(true);
     }).catch(() => setDataReady(true));
   }, []);
