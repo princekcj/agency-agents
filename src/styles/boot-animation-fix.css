@@ -9,6 +9,8 @@
    a ring rotates — the single biggest source of jank. */
 .ultron-boot {
   backdrop-filter: none;
+  /* Isolate layout so child mount/unmount never reflows the flex centering. */
+  contain: layout paint;
 }
 
 /* Promote every animated element to its own GPU layer so their animations
@@ -98,10 +100,38 @@
   50%       { opacity: 1;    }
 }
 
+/* ── Boot log panel ─────────────────────────────────────────────────────────
+   The panel is always in the DOM; visibility is toggled via opacity so that
+   mounting/unmounting never triggers a layout shift in the centered content.
+   `contain: layout` on .ultron-boot further guarantees no parent reflow.    */
+
+.boot-log-panel {
+  will-change: opacity;
+  transition: opacity 0.35s ease;
+}
+
+.boot-log-panel.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.boot-log-panel.visible {
+  opacity: 1;
+}
+
 /* ── Boot log lines ─────────────────────────────────────────────────────────
    Promote to compositor layer so each new line fades in without triggering
    a full repaint of the panel.                                               */
 
 .boot-log-line {
   will-change: opacity, transform;
+}
+
+/* ── Override jarvis.css log-appear animation ──────────────────────────────
+   jarvis.css applies `animation: log-appear 0.4s ease` on .boot-log-panel,
+   which conflicts with our opacity-transition visibility toggling. Cancel
+   it so only the .hidden/.visible opacity transition remains.              */
+
+.boot-log-panel {
+  animation: none !important;
 }

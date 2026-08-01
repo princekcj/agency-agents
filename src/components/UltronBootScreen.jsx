@@ -6,7 +6,7 @@ function getUKTimeOfDay() {
   const ukHour = parseInt(
     new Intl.DateTimeFormat('en-GB', {
       hour: 'numeric', hour12: false, timeZone: 'Europe/London',
-    }).format(now), 10
+    }).format(now), 10)
   );
   if (ukHour < 6)  return 'night';
   if (ukHour < 12) return 'morning';
@@ -92,7 +92,7 @@ export default function UltronBootScreen({ stats, speak, onDone, dataReady }) {
   const timers = useRef([]);
   const exitedRef = useRef(false);
   const phaseRef = useRef('init');
-  const logEndRef = useRef(null);
+  const logScrollRef = useRef(null);
 
   const tod = getUKTimeOfDay();
   const bars = useMemo(() => makeBarConfig(30), []);
@@ -156,9 +156,11 @@ export default function UltronBootScreen({ stats, speak, onDone, dataReady }) {
     return () => timers.current.forEach(clearTimeout);
   }, []);
 
-  // Auto-scroll boot log
+  // Auto-scroll boot log — use scrollTop directly instead of scrollIntoView
+  // to avoid triggering layout shifts in the parent flex container.
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = logScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [bootLogs]);
 
   return (
@@ -215,20 +217,17 @@ export default function UltronBootScreen({ stats, speak, onDone, dataReady }) {
         )}
       </div>
 
-      {/* Boot log */}
-      {phase === 'active' && (
-        <div className="boot-log-panel">
-          <div className="boot-log-title">SYSTEM BOOT LOG</div>
-          <div className="boot-log-scroll">
-            {bootLogs.map((msg, i) => (
-              <div key={i} className={`boot-log-line bll-${msg.type}`}>
-                {msg.text}
-              </div>
-            ))}
-            <div ref={logEndRef} />
-          </div>
+      {/* Boot log — always rendered, visibility toggled via CSS to prevent layout shift */}
+      <div className={`boot-log-panel ${phase === 'active' ? 'visible' : 'hidden'}`}>
+        <div className="boot-log-title">SYSTEM BOOT LOG</div>
+        <div className="boot-log-scroll" ref={logScrollRef}>
+          {bootLogs.map((msg, i) => (
+            <div key={i} className={`boot-log-line bll-${msg.type}`}>
+              {msg.text}
+            </div>
+          ))}
         </div>
-      )}
+      </div>
 
       {/* Corner HUD brackets */}
       <div className="boot-corner tl" />
