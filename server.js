@@ -22,6 +22,13 @@ function normalizeFreeOpenRouterModel(model) {
   return isFreeOpenRouterModel(model) ? model : DEFAULT_FREE_MODEL;
 }
 
+// Mirrors bash's slugify in scripts/lib.sh: lowercase, replace non-alnum with hyphens, collapse & trim.
+// convert.sh uses this to name integration workspace dirs (integrations/openclaw/<slug>/).
+// install.sh's --agent flag matches against these same slugs, NOT the filename.
+function slugifyName(str) {
+  return str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const server = createServer(app);
@@ -464,8 +471,12 @@ app.post('/api/install', async (req, res) => {
   const toolsNeedingConvert = toolList.filter(t => !SOURCE_ONLY_TOOLS.has(t));
 
   const runInstall = () => {
+    // install.sh matches --agent against name-derived slugs (same as convert.sh uses
+    // for workspace dirs), NOT the filename-derived slug stored in agent.slug.
+    // e.g. file "academic-historian.md" has name "Historian" → slug "historian"
+    const installSlug = slugifyName(agent.name || agent.slug);
     const install = spawn('bash', ['scripts/install.sh',
-      '--agent', agent.slug,   // install.sh expects slug only, not division/slug
+      '--agent', installSlug,
       '--no-interactive',
       ...toolArgs,
     ]);
