@@ -3564,3 +3564,15 @@ body {
     align-items: flex-end;
   }
 }
+
+.chat-settings-link {
+  margin-left: auto;
+  color: var(--accent-blue, #60a5fa);
+  font-size: 10px;
+  text-decoration: none;
+}
+
+.chat-settings-link:hover {
+  color: var(--text-primary, #fff);
+  text-decoration: underline;
+}

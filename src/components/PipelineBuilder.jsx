@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Plus, X, Play, Loader, Settings, Key, ArrowDown, Bot, Download, MessageSquare, Send, User, Clock, Trash2, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, RefreshCw, AlertTriangle } from 'lucide-react';
 import ErrorBanner from './ErrorBanner.jsx';
+import { FREE_MODELS, OPENROUTER_FREE_MODELS_URL, normalizeFreeModel } from '../lib/freeModels.js';
 
 const LS_KEY = 'agency_openrouter_key';
 const LS_MDL = 'agency_openrouter_model';
@@ -10,14 +11,6 @@ const LS_PIPELINES = 'agency_saved_pipelines';
 function sanitizeHeaderValue(value) {
   return String(value || '').replace(/[^\x20-\x7E]/g, '').trim();
 }
-
-const FREE_MODELS = [
-  { id: 'meta-llama/llama-3.3-70b-instruct:free',   label: 'Llama 3.3 70B' },
-  { id: 'deepseek/deepseek-r1:free',                 label: 'DeepSeek R1' },
-  { id: 'deepseek/deepseek-chat-v3-0324:free',       label: 'DeepSeek V3' },
-  { id: 'google/gemma-3-27b-it:free',                label: 'Gemma 3 27B' },
-  { id: 'mistralai/mistral-7b-instruct:free',        label: 'Mistral 7B' },
-];
 
 const INTERVALS = [
   { label: 'Every hour',    cron: '0 * * * *' },
@@ -389,7 +382,7 @@ export default function PipelineBuilder({ agents }) {
   const [keyInput, setKeyInput]       = useState('');
   const [schedulerToken, setSchedulerToken] = useState(() => sanitizeHeaderValue(localStorage.getItem(LS_SCHEDULER_TOKEN) || ''));
   const [schedulerTokenInput, setSchedulerTokenInput] = useState('');
-  const [model, setModel]             = useState(() => localStorage.getItem(LS_MDL) || FREE_MODELS[0].id);
+  const [model, setModel]             = useState(() => normalizeFreeModel(localStorage.getItem(LS_MDL) || FREE_MODELS[0].id));
   const [searchQ, setSearchQ]         = useState('');
   const [showPicker, setShowPicker]   = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
@@ -423,7 +416,7 @@ export default function PipelineBuilder({ agents }) {
     setSchedulerToken(token);
     setSchedulerTokenInput('');
   };
-  const saveModel = (m) => { setModel(m); localStorage.setItem(LS_MDL, m); };
+  const saveModel = (m) => { const freeModel = normalizeFreeModel(m); setModel(freeModel); localStorage.setItem(LS_MDL, freeModel); };
 
   const addAgent    = (agent) => { setPipeline(p => [...p, agent]); setShowPicker(false); setSearchQ(''); };
   const removeAgent = (idx)  => setPipeline(p => p.filter((_, i) => i !== idx));
@@ -595,7 +588,7 @@ export default function PipelineBuilder({ agents }) {
                 onKeyDown={e => e.key === 'Enter' && saveSchedulerToken()} />
               <button className="chat-save-btn" onClick={saveSchedulerToken}>Save</button>
             </div>
-            <div className="chat-settings-row" style={{ marginTop: 8 }}><Bot size={11} /><span>Model</span></div>
+            <div className="chat-settings-row" style={{ marginTop: 8 }}><Bot size={11} /><span>Free Model</span><a href={OPENROUTER_FREE_MODELS_URL} target="_blank" rel="noreferrer" className="chat-settings-link">OpenRouter free list</a></div>
             <div className="chat-model-list">
               {FREE_MODELS.map(m => (
                 <button key={m.id} className={`chat-model-btn ${model === m.id ? 'active' : ''}`} onClick={() => saveModel(m.id)}>
