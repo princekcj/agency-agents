@@ -449,23 +449,51 @@ app.post('/api/install', async (req, res) => {
 
   broadcast({ type: 'install_start', agentId });
   const agentArg = `${agent.division}/${agent.slug}`;
-  // Use caller-supplied tools; fall back to claude-code if none provided
   const toolList = Array.isArray(tools) && tools.length ? tools : ['claude-code'];
 
   const toolArgs = [];
   toolList.forEach(t => { toolArgs.push('--tool'); toolArgs.push(t); });
 
-  const install = spawn('bash', ['scripts/install.sh',
-    '--agent', agentArg,
-    '--no-interactive',
-    ...toolArgs,
-  ]);
+  // Tools that install directly from source .md files — no convert step needed.
+  // Everything else (openclaw, codex, cursor, gemini-cli, etc.) needs convert.sh
+  // to generate files in integrations/<tool>/ before install.sh can copy them.
+  const SOURCE_ONLY_TOOLS = new Set(['claude-code', 'copilot']);
+  const toolsNeedingConvert = toolList.filter(t => !SOURCE_ONLY_TOOLS.has(t));
 
-  install.stdout.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
-  install.stderr.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
-  install.on('close', code2 => {
-    broadcast({ type: 'install_done', exitCode: code2, agentId: agentArg });
-  });
+  const runInstall = () => {
+    const install = spawn('bash', ['scripts/install.sh',
+      '--agent', agentArg,
+      '--no-interactive',
+      ...toolArgs,
+    ]);
+    install.stdout.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
+    install.stderr.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
+    install.on('close', code2 => {
+      broadcast({ type: 'install_done', exitCode: code2, agentId: agentArg });
+    });
+  };
+
+  if (toolsNeedingConvert.length === 0) {
+    runInstall();
+    return;
+  }
+
+  // Convert each tool sequentially so integration files are fresh, then install
+  broadcast({ type: 'install_log', text: `[convert] Generating integration files for: ${toolsNeedingConvert.join(', ')}\n` });
+  let convertIdx = 0;
+  const runNextConvert = () => {
+    if (convertIdx >= toolsNeedingConvert.length) { runInstall(); return; }
+    const tool = toolsNeedingConvert[convertIdx++];
+    broadcast({ type: 'install_log', text: `[convert] Running convert.sh --tool ${tool}...\n` });
+    const conv = spawn('bash', ['scripts/convert.sh', '--tool', tool], { cwd: __dirname });
+    conv.stdout.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
+    conv.stderr.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
+    conv.on('close', code => {
+      if (code !== 0) broadcast({ type: 'install_log', text: `[convert] Warning: convert exited ${code} for ${tool}\n` });
+      runNextConvert();
+    });
+  };
+  runNextConvert();
 });
 
 // -- Cron job registry ---------------------------------------------------------
