@@ -85,6 +85,8 @@ function speakViaBrowser(synth, text, onEnd) {
   utter.onend = () => onEnd?.();
   utter.onerror = () => onEnd?.();
 
+  // Chrome can leave speechSynthesis in a paused state; resume before speaking.
+  if (synth.paused) synth.resume();
   synth.speak(utter);
   return utter;
 }
@@ -132,6 +134,8 @@ export function useVoice() {
 
     const handleFallback = () => {
       if (synthRef.current) {
+        // Chrome can pause speechSynthesis after tab switches; resume before speaking.
+        if (synthRef.current.paused) synthRef.current.resume();
         speakViaBrowser(synthRef.current, text, handleDone);
       } else {
         handleDone();

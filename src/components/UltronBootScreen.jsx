@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Eye } from 'lucide-react';
+import { Eye, Volume2 } from 'lucide-react';
 
 function getUKTimeOfDay() {
   const now = new Date();
@@ -81,8 +81,27 @@ function makeBarConfig(count) {
   }));
 }
 
+// Unlock audio playback within a user-gesture handler so the browser
+// allows subsequent programmatic audio (both Audio elements and speechSynthesis).
+function unlockAudio() {
+  // Resume speechSynthesis if it was suspended (Chrome does this on load).
+  if (typeof window !== 'undefined' && window.speechSynthesis) {
+    window.speechSynthesis.resume();
+    // Speak and immediately cancel a tiny utterance to fully unlock the engine.
+    const warmup = new SpeechSynthesisUtterance('');
+    warmup.volume = 0;
+    try { window.speechSynthesis.speak(warmup); window.speechSynthesis.cancel(); } catch {}
+  }
+  // Play a silent Audio element to unlock the HTMLAudioElement path.
+  try {
+    const silent = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
+    silent.volume = 0;
+    silent.play().then(() => {}).catch(() => {});
+  } catch {}
+}
+
 export default function UltronBootScreen({ stats, speak, onDone, dataReady }) {
-  const [phase, setPhase] = useState('init');
+  const [phase, setPhase] = useState('loading');
   const [visibleSegs, setVisibleSegs] = useState([]);
   const [bootLogs, setBootLogs] = useState([]);
   const [speaking, setSpeaking] = useState(false);
@@ -90,7 +109,7 @@ export default function UltronBootScreen({ stats, speak, onDone, dataReady }) {
 
   const timers = useRef([]);
   const exitedRef = useRef(false);
-  const phaseRef = useRef('init');
+  const phaseRef = useRef('loading');
   const logScrollRef = useRef(null);
 
   const tod = getUKTimeOfDay();
@@ -105,8 +124,12 @@ export default function UltronBootScreen({ stats, speak, onDone, dataReady }) {
   };
 
   const handleClick = () => {
-    // Allow skip once enough boot logs have appeared
-    if (phaseRef.current === 'active' && bootLogs.length >= 5) doExit();
+    if (phaseRef.current === 'ready') {
+      unlockAudio();
+      startBoot();
+    } else if (phaseRef.current === 'active' && bootLogs.length >= 5) {
+      doExit();
+    }
   };
 
   const startBoot = () => {
@@ -117,8 +140,6 @@ export default function UltronBootScreen({ stats, speak, onDone, dataReady }) {
     const d = stats?.divisions || '...';
     const script = SCRIPTS[tod];
 
-    // Attempt to speak immediately — browser may allow it on revisit/interaction;
-    // if blocked, speak() fails silently and the fallback timer exits the screen.
     setSpeaking(true);
     speak(script.voice(n, d), () => {
       setSpeaking(false);
@@ -143,12 +164,12 @@ export default function UltronBootScreen({ stats, speak, onDone, dataReady }) {
     timers.current.push(fallback);
   };
 
-  // Auto-start as soon as data is ready
+  // Show the "click to initialize" prompt once data is ready.
   useEffect(() => {
-    if (dataReady && phaseRef.current === 'init') {
-      startBoot();
+    if (dataReady && phaseRef.current === 'loading') {
+      phaseRef.current = 'ready';
+      setPhase('ready');
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataReady]);
 
   useEffect(() => {
@@ -184,6 +205,22 @@ export default function UltronBootScreen({ stats, speak, onDone, dataReady }) {
 
         <div className="boot-title">THE AGENCY</div>
         <div className="boot-subtitle">ULTRON PROTOCOL</div>
+
+        {/* Ready gate — shown until the user clicks to unlock audio */}
+        {phase === 'ready' && (
+          <div className="boot-ready-gate">
+            <div className="boot-ready-icon">
+              <Volume2 size={20} color="#dc2626" />
+            </div>
+            <div className="boot-ready-text">CLICK TO INITIALIZE</div>
+            <div className="boot-ready-sub">Audio required for full experience</div>
+          </div>
+        )}
+
+        {/* Loading state before data is ready */}
+        {phase === 'loading' && (
+          <div className="boot-prompt loading">LOADING...</div>
+        )}
 
         {/* Waveform */}
         <div className={`boot-waveform ${phase === 'active' ? 'visible' : ''}`}>

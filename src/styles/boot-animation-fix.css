@@ -135,3 +135,44 @@
 .boot-log-panel {
   animation: none !important;
 }
+
+/* ── Ready gate (click to initialize) ──────────────────────────────────────
+   Shown after data loads but before the boot sequence starts. Requires a
+   user click to unlock browser audio autoplay restrictions.                */
+
+.boot-ready-gate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+  animation: prompt-blink 2s ease-in-out infinite;
+}
+
+.boot-ready-icon {
+  width: 48px;
+  height: 48px;
+  border: 2px solid rgba(220, 38, 38, 0.5);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 20px rgba(220, 38, 38, 0.3);
+}
+
+.boot-ready-text {
+  font-family: var(--font-hud, 'Orbitron', monospace);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 5px;
+  color: var(--accent-blue, #dc2626);
+  text-shadow: 0 0 15px rgba(220, 38, 38, 0.6);
+}
+
+.boot-ready-sub {
+  font-family: var(--font-mono, 'Share Tech Mono', monospace);
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--text-muted, #6a2020);
+  text-transform: uppercase;
+}
