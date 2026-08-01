@@ -6,8 +6,7 @@ function getUKTimeOfDay() {
   const ukHour = parseInt(
     new Intl.DateTimeFormat('en-GB', {
       hour: 'numeric', hour12: false, timeZone: 'Europe/London',
-    }).format(now), 10)
-  );
+    }).format(now), 10);
   if (ukHour < 6)  return 'night';
   if (ukHour < 12) return 'morning';
   if (ukHour < 17) return 'afternoon';
