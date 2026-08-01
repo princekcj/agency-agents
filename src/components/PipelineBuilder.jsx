@@ -12,15 +12,6 @@ function sanitizeHeaderValue(value) {
   return String(value || '').replace(/[^\x20-\x7E]/g, '').trim();
 }
 
-
-const INTERVALS = [
-  { label: 'Every hour',    cron: '0 * * * *' },
-  { label: 'Every 4 hours', cron: '0 */4 * * *' },
-  { label: 'Every 6 hours', cron: '0 */6 * * *' },
-  { label: 'Every 12 hours',cron: '0 */12 * * *' },
-  { label: 'Daily at time', cron: null },  // uses custom time
-];
-
 function buildSystemPrompt(agent) {
   return `You are ${agent.name}, a specialized AI agent in The Agency.
 Division: ${agent.divisionLabel}
@@ -29,6 +20,10 @@ ${agent.description ? `Description: ${agent.description}` : ''}
 Your full specification:
 ---
 ${agent.content}`;
+}
+
+function defaultStepConfig() {
+  return { stepPrompt: '', inputInstruction: '', outputInstruction: '' };
 }
 
 function loadSavedPipelines() {
@@ -40,7 +35,7 @@ function loadSavedPipelines() {
   }
 }
 
-function callAgent(agent, messages, apiKey, model, schedulerToken = '') {
+function callAgent(agent, messages, apiKey, model, schedulerToken = '', extraSystemInstructions = '') {
   const headers = {
     'Content-Type': 'application/json',
     'x-openrouter-key': sanitizeHeaderValue(apiKey),
@@ -48,13 +43,16 @@ function callAgent(agent, messages, apiKey, model, schedulerToken = '') {
   const cleanSchedulerToken = sanitizeHeaderValue(schedulerToken);
   if (cleanSchedulerToken) headers['x-scheduler-token'] = cleanSchedulerToken;
 
+  const systemContent = buildSystemPrompt(agent) +
+    (extraSystemInstructions ? `\n\n---\n\nStep Instructions:\n${extraSystemInstructions}` : '');
+
   return fetch('/api/chat', {
     method: 'POST',
     headers,
     body: JSON.stringify({
       model,
       stream: false,
-      messages: [{ role: 'system', content: buildSystemPrompt(agent) }, ...messages],
+      messages: [{ role: 'system', content: systemContent }, ...messages],
     }),
   }).then(async r => {
     const data = await r.json();
@@ -123,6 +121,14 @@ function downloadScheduleRun(run, scheduleName) {
   downloadMarkdown(`scheduled-run-${run.id}.md`, lines.join('\n'));
 }
 
+const INTERVALS = [
+  { label: 'Every hour',    cron: '0 * * * *' },
+  { label: 'Every 4 hours', cron: '0 */4 * * *' },
+  { label: 'Every 6 hours', cron: '0 */6 * * *' },
+  { label: 'Every 12 hours',cron: '0 */12 * * *' },
+  { label: 'Daily at time', cron: null },
+];
+
 // ── Schedule Panel ─────────────────────────────────────────────────────────────
 function SchedulePanel({ pipeline, input, apiKey, model }) {
   const [schedules, setSchedules]       = useState([]);
@@ -131,15 +137,13 @@ function SchedulePanel({ pipeline, input, apiKey, model }) {
   const [error, setError]               = useState('');
   const [success, setSuccess]           = useState('');
 
-  // New schedule form
   const [schedName, setSchedName]       = useState('');
   const [intervalIdx, setIntervalIdx]   = useState(0);
   const [dailyTime, setDailyTime]       = useState('09:00');
   const [showForm, setShowForm]         = useState(false);
 
-  // Expanded run viewer
   const [expandedRuns, setExpandedRuns] = useState({});
-  const [runs, setRuns]                 = useState({});  // scheduleId -> runs[]
+  const [runs, setRuns]                 = useState({});
 
   const fetchSchedules = useCallback(async () => {
     setLoading(true);
@@ -155,7 +159,6 @@ function SchedulePanel({ pipeline, input, apiKey, model }) {
   const buildCron = () => {
     const chosen = INTERVALS[intervalIdx];
     if (chosen.cron) return chosen.cron;
-    // Daily at time
     const [hh, mm] = dailyTime.split(':').map(Number);
     return `${mm} ${hh} * * *`;
   };
@@ -168,12 +171,9 @@ function SchedulePanel({ pipeline, input, apiKey, model }) {
 
   const saveSchedule = async () => {
     if (!schedName.trim()) { setError('Give this schedule a name.'); return; }
-    if (!pipeline.length)  { setError('Add at least one agent to the pipeline first.'); return; }
-    if (!input.trim())     { setError('Enter an initial prompt in the run panel first.'); return; }
-    if (!apiKey)           { setError('Enter your OpenRouter API key first.'); return; }
-
-    setSaving(true);
-    setError('');
+    if (!pipeline.length)  { setError('Add agents to the pipeline first.'); return; }
+    if (!apiKey)           { setError('API key required.'); return; }
+    setSaving(true); setError(''); setSuccess('');
     try {
       const res = await fetch('/api/schedules', {
         method: 'POST',
@@ -188,15 +188,8 @@ function SchedulePanel({ pipeline, input, apiKey, model }) {
           intervalLabel: buildIntervalLabel(),
         }),
       });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error || 'Failed to save'); }
-      else {
-        setSuccess('Schedule saved!');
-        setSchedName('');
-        setShowForm(false);
-        fetchSchedules();
-        setTimeout(() => setSuccess(''), 3000);
-      }
+      if (!res.ok) { const d = await res.json(); setError(d.error || 'Save failed'); }
+      else { setSuccess('Schedule saved!'); setSchedName(''); setShowForm(false); fetchSchedules(); }
     } catch (e) { setError(e.message); }
     setSaving(false);
   };
@@ -213,150 +206,101 @@ function SchedulePanel({ pipeline, input, apiKey, model }) {
 
   const runNow = async (id) => {
     await fetch(`/api/schedules/${id}/run`, { method: 'POST' });
-    setSuccess('Pipeline started! Check runs in a moment.');
-    setTimeout(() => { setSuccess(''); fetchSchedules(); }, 8000);
+    fetchSchedules();
   };
 
   const loadRuns = async (id) => {
-    const isOpen = expandedRuns[id];
-    if (isOpen) {
-      setExpandedRuns(p => ({ ...p, [id]: false }));
-      return;
-    }
-    try {
+    const toggled = { ...expandedRuns, [id]: !expandedRuns[id] };
+    setExpandedRuns(toggled);
+    if (toggled[id]) {
       const res = await fetch(`/api/schedules/${id}/runs`);
-      const data = await res.json();
-      setRuns(p => ({ ...p, [id]: data }));
-      setExpandedRuns(p => ({ ...p, [id]: true }));
-    } catch { setError('Failed to load runs'); }
+      setRuns(r => ({ ...r, [id]: (res.ok ? await res.json() : []) }));
+    }
   };
 
   return (
-    <div className="sched-panel">
-      <div className="sched-panel-header">
+    <div className="schedule-panel">
+      <div className="schedule-panel-header">
         <Clock size={12} />
-        <span>SCHEDULED PIPELINES</span>
-        <button className="sched-refresh-btn" onClick={fetchSchedules} title="Refresh">
-          <RefreshCw size={10} />
-        </button>
-        <button className="sched-new-btn" onClick={() => setShowForm(s => !s)}>
-          <Plus size={10} /> New Schedule
+        <span>Scheduled Runs</span>
+        <button className="pipeline-add-btn" style={{ marginLeft: 'auto', padding: '2px 8px', marginTop: 0 }}
+          onClick={() => setShowForm(s => !s)}>
+          <Plus size={10} /> New
         </button>
       </div>
 
-      {error   && <div className="sched-error">{error}</div>}
-      {success && <div className="sched-success">{success}</div>}
-
       {showForm && (
-        <div className="sched-form">
-          <div className="sched-form-label">Schedule Name</div>
-          <input
-            className="sched-input"
-            placeholder="e.g. Daily Market Brief"
-            value={schedName}
-            onChange={e => setSchedName(e.target.value)}
-          />
-
-          <div className="sched-form-label" style={{ marginTop: 10 }}>Run Frequency</div>
-          <div className="sched-interval-list">
+        <div className="schedule-form">
+          <input className="pipeline-search" placeholder="Schedule name"
+            value={schedName} onChange={e => setSchedName(e.target.value)} />
+          <div className="schedule-interval-row">
             {INTERVALS.map((iv, i) => (
-              <button
-                key={i}
-                className={`sched-interval-btn ${intervalIdx === i ? 'active' : ''}`}
-                onClick={() => setIntervalIdx(i)}
-              >
+              <button key={i} className={`schedule-interval-btn ${intervalIdx === i ? 'active' : ''}`}
+                onClick={() => setIntervalIdx(i)}>
                 {iv.label}
               </button>
             ))}
           </div>
-
           {INTERVALS[intervalIdx].cron === null && (
-            <div className="sched-time-row">
-              <span className="sched-form-label">Time (UTC)</span>
-              <input
-                type="time"
-                className="sched-time-input"
-                value={dailyTime}
-                onChange={e => setDailyTime(e.target.value)}
-              />
-            </div>
+            <input type="time" className="pipeline-search" value={dailyTime}
+              onChange={e => setDailyTime(e.target.value)} />
           )}
-
-          <div className="sched-form-hint">
-            Uses current pipeline ({pipeline.length} agent{pipeline.length !== 1 ? 's' : ''}) and prompt.
-          </div>
-
-          <button className="sched-save-btn" onClick={saveSchedule} disabled={saving}>
+          <button className="pipeline-export-btn" onClick={saveSchedule} disabled={saving}>
             {saving ? <Loader size={11} className="spin" /> : <Clock size={11} />}
-            {saving ? 'Saving…' : 'Save Schedule'}
+            Save Schedule
           </button>
         </div>
       )}
 
-      {loading && <div className="sched-loading">Loading schedules…</div>}
+      {error   && <div className="schedule-error">{error}</div>}
+      {success && <div className="schedule-success">{success}</div>}
 
-      {!loading && schedules.length === 0 && !showForm && (
-        <div className="sched-empty">No schedules yet. Create one above to automate your pipeline.</div>
-      )}
-
-      {schedules.map(s => (
-        <div key={s.id} className={`sched-item ${s.enabled ? 'enabled' : 'disabled'}`}>
-          <div className="sched-item-header">
-            <div className="sched-item-name">{s.name}</div>
-            <div className="sched-item-actions">
-              <button className="sched-action-btn" title="Run now" onClick={() => runNow(s.id)}>
-                <Play size={10} />
-              </button>
-              <button className="sched-action-btn" title={s.enabled ? 'Pause' : 'Enable'} onClick={() => toggleSchedule(s.id)}>
-                {s.enabled ? <ToggleRight size={12} style={{ color: 'var(--accent-green)' }} /> : <ToggleLeft size={12} />}
-              </button>
-              <button className="sched-action-btn" title="Delete" onClick={() => deleteSchedule(s.id)}>
-                <Trash2 size={10} style={{ color: '#f87171' }} />
-              </button>
-            </div>
+      {loading ? (
+        <div className="pipeline-empty">Loading schedules...</div>
+      ) : schedules.length === 0 ? (
+        <div className="pipeline-empty">No schedules yet. Create one above.</div>
+      ) : schedules.map(s => (
+        <div key={s.id} className="schedule-item">
+          <div className="schedule-item-header">
+            <span className="schedule-item-name">{s.name}</span>
+            <span className="schedule-item-interval">{s.intervalLabel || s.cron}</span>
+            <button className="pipeline-remove-btn" title={s.active ? 'Pause' : 'Resume'}
+              onClick={() => toggleSchedule(s.id)} style={{ color: s.active ? '#00ff88' : '#6a2020' }}>
+              {s.active ? <ToggleRight size={13} /> : <ToggleLeft size={13} />}
+            </button>
+            <button className="pipeline-remove-btn" title="Run now" onClick={() => runNow(s.id)}>
+              <Play size={11} />
+            </button>
+            <button className="pipeline-remove-btn" title="View runs" onClick={() => loadRuns(s.id)}>
+              {expandedRuns[s.id] ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+            </button>
+            <button className="pipeline-remove-btn" onClick={() => deleteSchedule(s.id)}>
+              <Trash2 size={11} />
+            </button>
           </div>
-          <div className="sched-item-meta">
-            <span className="sched-badge">{s.intervalLabel}</span>
-            {s.lastRunAt && (
-              <span className={`sched-badge ${s.lastRunStatus}`}>
-                Last: {new Date(s.lastRunAt).toLocaleString()} · {s.lastRunStatus}
-              </span>
-            )}
-          </div>
-          <div className="sched-item-agents">
-            {s.pipeline.map((a, i) => (
-              <span key={i} className="sched-agent-chip">{a.emoji} {a.name}</span>
-            ))}
-          </div>
-          <button className="sched-runs-toggle" onClick={() => loadRuns(s.id)}>
-            {expandedRuns[s.id] ? <ChevronUp size={9} /> : <ChevronDown size={9} />}
-            Run History
-          </button>
-
+          {s.lastRun && (
+            <div className="schedule-item-meta">Last run: {new Date(s.lastRun).toLocaleString()}</div>
+          )}
           {expandedRuns[s.id] && (
-            <div className="sched-runs">
-              {(runs[s.id] || []).length === 0 && (
-                <div className="sched-empty" style={{ padding: '8px 12px' }}>No runs yet.</div>
-              )}
-              {(runs[s.id] || []).map(run => (
-                <div key={run.id} className={`sched-run ${run.status}`}>
-                  <div className="sched-run-header">
-                    <span className={`sched-badge ${run.status}`}>{run.status}</span>
-                    <span className="sched-run-time">{new Date(run.startedAt).toLocaleString()}</span>
-                    <button
-                      className="sched-action-btn"
-                      title="Download results"
-                      onClick={() => downloadScheduleRun(run, s.name)}
-                    >
+            <div className="schedule-runs">
+              {(runs[s.id] || []).length === 0 ? (
+                <div className="pipeline-empty" style={{ padding: 6 }}>No runs yet.</div>
+              ) : (runs[s.id] || []).map(run => (
+                <div key={run.id} className={`schedule-run ${run.status}`}>
+                  <div className="schedule-run-header">
+                    <span className={`pipeline-result-badge ${run.status}`}>{run.status}</span>
+                    <span className="schedule-run-date">{new Date(run.startedAt).toLocaleString()}</span>
+                    <button className="pipeline-remove-btn" title="Download"
+                      onClick={() => downloadScheduleRun(run, s.name)}>
                       <Download size={10} />
                     </button>
                   </div>
-                  {run.results.map((r, i) => (
-                    <div key={i} className="sched-run-step">
-                      <span className="sched-run-agent">{r.agentEmoji} {r.agentName}</span>
-                      <div className="sched-run-output">
-                        {r.error ? <span style={{ color: '#f87171' }}>⚠ {r.error}</span> : (r.output?.slice(0, 300) + (r.output?.length > 300 ? '…' : ''))}
-                      </div>
+                  {run.results?.map((r, ri) => (
+                    <div key={ri} className="schedule-run-step">
+                      <span>{r.agentEmoji} {r.agentName}</span>
+                      <span className="schedule-run-step-out">
+                        {r.error ? `Error: ${r.error}` : (r.output || '').slice(0, 80)}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -371,24 +315,24 @@ function SchedulePanel({ pipeline, input, apiKey, model }) {
 
 // ── Main Pipeline Builder ─────────────────────────────────────────────────────
 export default function PipelineBuilder({ agents }) {
-  const [pipeline, setPipeline]       = useState([]);
+  const [pipeline, setPipeline]         = useState([]);
   const [savedPipelines, setSavedPipelines] = useState(() => loadSavedPipelines());
   const [activePipelineId, setActivePipelineId] = useState('');
   const [pipelineName, setPipelineName] = useState('Untitled pipeline');
-  const [input, setInput]             = useState('');
-  const [running, setRunning]         = useState(false);
-  const [results, setResults]         = useState([]);
+  const [input, setInput]               = useState('');
+  const [running, setRunning]           = useState(false);
+  const [results, setResults]           = useState([]);
   const [showSettings, setShowSettings] = useState(false);
-  const [apiKey, setApiKey]           = useState(() => sanitizeHeaderValue(localStorage.getItem(LS_KEY) || ''));
-  const [keyInput, setKeyInput]       = useState('');
+  const [apiKey, setApiKey]             = useState(() => sanitizeHeaderValue(localStorage.getItem(LS_KEY) || ''));
+  const [keyInput, setKeyInput]         = useState('');
   const [schedulerToken, setSchedulerToken] = useState(() => sanitizeHeaderValue(localStorage.getItem(LS_SCHEDULER_TOKEN) || ''));
   const [schedulerTokenInput, setSchedulerTokenInput] = useState('');
-  const [model, setModel]             = useState(() => normalizeFreeModel(localStorage.getItem(LS_MDL) || FREE_MODELS[0].id));
-  const [searchQ, setSearchQ]         = useState('');
-  const [showPicker, setShowPicker]   = useState(false);
+  const [model, setModel]               = useState(() => normalizeFreeModel(localStorage.getItem(LS_MDL) || FREE_MODELS[0].id));
+  const [searchQ, setSearchQ]           = useState('');
+  const [showPicker, setShowPicker]     = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
+  const [expandedSteps, setExpandedSteps] = useState(new Set());
 
-  // Post-run chat with the final agent
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput]       = useState('');
   const [chatLoading, setChatLoading]   = useState(false);
@@ -410,7 +354,7 @@ export default function PipelineBuilder({ agents }) {
     localStorage.setItem(LS_PIPELINES, JSON.stringify(savedPipelines));
   }, [savedPipelines]);
 
-  const saveKey  = () => { const k = sanitizeHeaderValue(keyInput); if (!k) return; localStorage.setItem(LS_KEY, k); setApiKey(k); setKeyInput(''); setShowSettings(false); };
+  const saveKey = () => { const k = sanitizeHeaderValue(keyInput); if (!k) return; localStorage.setItem(LS_KEY, k); setApiKey(k); setKeyInput(''); setShowSettings(false); };
   const saveSchedulerToken = () => {
     const token = sanitizeHeaderValue(schedulerTokenInput);
     localStorage.setItem(LS_SCHEDULER_TOKEN, token);
@@ -419,8 +363,22 @@ export default function PipelineBuilder({ agents }) {
   };
   const saveModel = (m) => { const freeModel = normalizeFreeModel(m); setModel(freeModel); localStorage.setItem(LS_MDL, freeModel); };
 
-  const addAgent    = (agent) => { setPipeline(p => [...p, agent]); setShowPicker(false); setSearchQ(''); };
-  const removeAgent = (idx)  => setPipeline(p => p.filter((_, i) => i !== idx));
+  const addAgent    = (agent) => { setPipeline(p => [...p, { ...agent, ...defaultStepConfig() }]); setShowPicker(false); setSearchQ(''); };
+  const removeAgent = (idx) => {
+    setPipeline(p => p.filter((_, i) => i !== idx));
+    setExpandedSteps(prev => { const next = new Set(prev); next.delete(idx); return next; });
+  };
+  const updateStepField = (idx, field, value) => {
+    setPipeline(p => p.map((step, i) => i === idx ? { ...step, [field]: value } : step));
+  };
+  const toggleStepExpand = (idx) => {
+    setExpandedSteps(prev => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx); else next.add(idx);
+      return next;
+    });
+  };
+
   const newPipeline = () => {
     setPipeline([]);
     setInput('');
@@ -428,31 +386,52 @@ export default function PipelineBuilder({ agents }) {
     setChatMessages([]);
     setActivePipelineId('');
     setPipelineName('Untitled pipeline');
+    setExpandedSteps(new Set());
   };
+
   const saveCurrentPipeline = () => {
     if (!pipeline.length) return;
     const id = activePipelineId || `pipeline-${Date.now()}`;
     const record = {
       id,
       name: pipelineName.trim() || 'Untitled pipeline',
-      agentIds: pipeline.map(agent => agent.id),
+      agentIds: pipeline.map(s => s.id),
+      steps: pipeline.map(s => ({
+        agentId: s.id,
+        stepPrompt: s.stepPrompt || '',
+        inputInstruction: s.inputInstruction || '',
+        outputInstruction: s.outputInstruction || '',
+      })),
       input,
       updatedAt: new Date().toISOString(),
     };
     setSavedPipelines(items => [record, ...items.filter(item => item.id !== id)]);
     setActivePipelineId(id);
   };
+
   const loadPipeline = (id) => {
     const saved = savedPipelines.find(item => item.id === id);
     if (!saved) return;
     setActivePipelineId(saved.id);
     setPipelineName(saved.name);
-    setPipeline(saved.agentIds.map(agentId => agents.find(agent => agent.id === agentId)).filter(Boolean));
+    if (saved.steps) {
+      setPipeline(saved.steps.map(s => {
+        const agent = agents.find(a => a.id === s.agentId);
+        return agent ? { ...agent, stepPrompt: s.stepPrompt || '', inputInstruction: s.inputInstruction || '', outputInstruction: s.outputInstruction || '' } : null;
+      }).filter(Boolean));
+    } else {
+      setPipeline((saved.agentIds || []).map(agentId => {
+        const agent = agents.find(a => a.id === agentId);
+        return agent ? { ...agent, ...defaultStepConfig() } : null;
+      }).filter(Boolean));
+    }
     setInput(saved.input || '');
     setResults([]);
     setChatMessages([]);
     setChatError('');
+    setExpandedSteps(new Set());
   };
+
   const deletePipeline = (id) => {
     setSavedPipelines(items => items.filter(item => item.id !== id));
     if (activePipelineId === id) newPipeline();
@@ -472,22 +451,35 @@ export default function PipelineBuilder({ agents }) {
     let currentInput = input.trim();
 
     for (let i = 0; i < pipeline.length; i++) {
-      const agent = pipeline[i];
-      setResults(r => [...r, { agent, status: 'running', output: '' }]);
+      const step = pipeline[i];
+      const prevStep = i > 0 ? pipeline[i - 1] : null;
+      setResults(r => [...r, { agent: step, status: 'running', output: '' }]);
 
       try {
-        const userContent = i === 0
-          ? currentInput
-          : `Previous agent output:\n\n${currentInput}\n\nContinue processing this according to your role.`;
+        let userContent;
+        if (i === 0) {
+          userContent = step.inputInstruction
+            ? `${step.inputInstruction}\n\n${currentInput}`
+            : currentInput;
+        } else {
+          userContent = step.inputInstruction
+            ? `${step.inputInstruction}\n\nOutput from ${prevStep.name}:\n\n${currentInput}`
+            : `Output from ${prevStep.name}:\n\n${currentInput}\n\nProcess this according to your role.`;
+        }
 
-        const data = await callAgent(agent, [{ role: 'user', content: userContent }], cleanApiKey, model, cleanSchedulerToken);
+        const extraInstructions = [
+          step.stepPrompt,
+          step.outputInstruction ? `Format your output as follows: ${step.outputInstruction}` : '',
+        ].filter(Boolean).join('\n\n');
+
+        const data = await callAgent(step, [{ role: 'user', content: userContent }], cleanApiKey, model, cleanSchedulerToken, extraInstructions);
         if (data.error) throw new Error(data.error);
 
         const output = data.choices?.[0]?.message?.content || '(no output)';
         currentInput = output;
-        setResults(r => r.map((step, idx) => idx === i ? { ...step, status: 'done', output } : step));
+        setResults(r => r.map((s, idx) => idx === i ? { ...s, status: 'done', output } : s));
       } catch (e) {
-        setResults(r => r.map((step, idx) => idx === i ? { ...step, status: 'error', output: e.message } : step));
+        setResults(r => r.map((s, idx) => idx === i ? { ...s, status: 'error', output: e.message } : s));
         break;
       }
     }
@@ -495,7 +487,6 @@ export default function PipelineBuilder({ agents }) {
     setRunning(false);
   }, [pipeline, input, apiKey, model, schedulerToken]);
 
-  // Continue chatting with the final agent, with pipeline context
   const sendChatMessage = useCallback(async () => {
     const text = chatInput.trim();
     const cleanApiKey = sanitizeHeaderValue(apiKey);
@@ -562,7 +553,7 @@ export default function PipelineBuilder({ agents }) {
 
   return (
     <div className="pipeline-layout">
-      {/* ── Left: builder ── */}
+      {/* Left: builder */}
       <div className="pipeline-left">
         <div className="pipeline-section-title">
           AGENT PIPELINE
@@ -639,17 +630,70 @@ export default function PipelineBuilder({ agents }) {
           {pipeline.length === 0 && (
             <div className="pipeline-empty">Add agents below to build a pipeline</div>
           )}
-          {pipeline.map((agent, i) => (
-            <React.Fragment key={`${agent.id}-${i}`}>
+          {pipeline.map((step, i) => (
+            <React.Fragment key={`${step.id}-${i}`}>
               <div className="pipeline-stage">
                 <div className="pipeline-stage-num">{i + 1}</div>
-                <span className="pipeline-stage-emoji">{agent.emoji}</span>
+                <span className="pipeline-stage-emoji">{step.emoji}</span>
                 <div className="pipeline-stage-info">
-                  <div className="pipeline-stage-name">{agent.name}</div>
-                  <div className="pipeline-stage-div" style={{ color: agent.divisionColor }}>{agent.divisionLabel}</div>
+                  <div className="pipeline-stage-name">{step.name}</div>
+                  <div className="pipeline-stage-div" style={{ color: step.divisionColor }}>{step.divisionLabel}</div>
                 </div>
+                <button
+                  className={`pipeline-step-cfg-btn${expandedSteps.has(i) ? ' active' : ''}`}
+                  onClick={() => toggleStepExpand(i)}
+                  title="Configure step prompt & I/O"
+                >
+                  <Settings size={10} />
+                </button>
                 <button className="pipeline-remove-btn" onClick={() => removeAgent(i)}><X size={11} /></button>
               </div>
+              {expandedSteps.has(i) && (
+                <div className="pipeline-step-config">
+                  <div className="pipeline-step-config-field">
+                    <label className="pipeline-step-config-label">Step instructions</label>
+                    <textarea
+                      className="pipeline-step-config-ta"
+                      placeholder="Custom additions to this agent's system prompt for this step. E.g. 'Focus only on sentiment analysis — ignore off-topic content.'"
+                      value={step.stepPrompt}
+                      onChange={e => updateStepField(i, 'stepPrompt', e.target.value)}
+                      rows={2}
+                    />
+                  </div>
+                  <div className="pipeline-step-config-field">
+                    <label className="pipeline-step-config-label">
+                      {i === 0
+                        ? 'Input framing (prepended to initial prompt)'
+                        : `Input handling — output from step ${i}: ${pipeline[i - 1].name}`}
+                    </label>
+                    <textarea
+                      className="pipeline-step-config-ta"
+                      placeholder={i === 0
+                        ? 'E.g. "You will receive raw meeting notes. Extract all action items from them."'
+                        : 'E.g. "The previous agent extracted key entities. Now classify each entity by type and assign a confidence score."'
+                      }
+                      value={step.inputInstruction}
+                      onChange={e => updateStepField(i, 'inputInstruction', e.target.value)}
+                      rows={2}
+                    />
+                  </div>
+                  <div className="pipeline-step-config-field">
+                    <label className="pipeline-step-config-label">
+                      {i === pipeline.length - 1 ? 'Final output format' : 'Output format for next step'}
+                    </label>
+                    <textarea
+                      className="pipeline-step-config-ta"
+                      placeholder={i === pipeline.length - 1
+                        ? 'E.g. "Return a JSON object with keys: summary (str), actions (list), confidence (0–1)."'
+                        : 'E.g. "Produce a numbered list — one item per line — so the next agent can process each item individually."'
+                      }
+                      value={step.outputInstruction}
+                      onChange={e => updateStepField(i, 'outputInstruction', e.target.value)}
+                      rows={2}
+                    />
+                  </div>
+                </div>
+              )}
               {i < pipeline.length - 1 && (
                 <div className="pipeline-arrow"><ArrowDown size={12} /></div>
               )}
@@ -678,11 +722,23 @@ export default function PipelineBuilder({ agents }) {
             </div>
           </div>
         )}
+
+        <button
+          className="pipeline-schedule-toggle"
+          onClick={() => setShowSchedule(s => !s)}
+        >
+          <Clock size={11} />
+          {showSchedule ? 'Hide Schedule' : 'Schedule Pipeline'}
+          {showSchedule ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+        </button>
+
+        {showSchedule && (
+          <SchedulePanel pipeline={pipeline} input={input} apiKey={apiKey} model={model} />
+        )}
       </div>
 
-      {/* ── Right: run + results + interactive chat ── */}
+      {/* Right: run + results + interactive chat */}
       <div className="pipeline-right">
-        {/* Run controls */}
         <div className="pipeline-section-title">RUN PIPELINE</div>
 
         {!apiKey ? (
@@ -698,38 +754,36 @@ export default function PipelineBuilder({ agents }) {
               value={input} onChange={e => setInput(e.target.value)} rows={4}
             />
             <div className="pipeline-run-row">
-              <button className="pipeline-run-btn"
-                disabled={!pipeline.length || !input.trim() || running}
+              <button
+                className="pipeline-run-btn"
                 onClick={runPipeline}
+                disabled={running || !pipeline.length || !input.trim()}
               >
-                {running
-                  ? <><Loader size={13} className="spin" /> Running...</>
-                  : <><Play size={13} /> Run Pipeline ({pipeline.length} agent{pipeline.length !== 1 ? 's' : ''})</>
-                }
+                {running ? <Loader size={13} className="spin" /> : <Play size={13} />}
+                {running ? 'Running...' : `Run ${pipeline.length} Agent${pipeline.length !== 1 ? 's' : ''}`}
               </button>
-              {pipelineDone && (
-                <button className="pipeline-export-btn"
+              {results.length > 0 && !running && (
+                <button
+                  className="pipeline-export-btn"
                   title="Download all results as markdown"
                   onClick={() => downloadPipelineResults(pipeline, results, input)}
                 >
                   <Download size={13} /> Export All
                 </button>
               )}
-              <button
-                className={`pipeline-schedule-btn ${showSchedule ? 'active' : ''}`}
-                title="Manage scheduled runs"
-                onClick={() => setShowSchedule(s => !s)}
-              >
-                <Clock size={13} /> Schedule
-              </button>
             </div>
-            <div className="pipeline-model-hint"><Bot size={9} /> {modelLabel}</div>
-          </>
-        )}
 
-        {/* Scheduler panel */}
-        {showSchedule && (
-          <SchedulePanel pipeline={pipeline} input={input} apiKey={apiKey} model={model} />
+            {!pipeline.length && (
+              <div className="pipeline-hint">
+                Add agents in the left panel to build your pipeline.
+              </div>
+            )}
+            {pipeline.length > 0 && !input.trim() && (
+              <div className="pipeline-hint">
+                Uses current pipeline ({pipeline.length} agent{pipeline.length !== 1 ? 's' : ''}) and prompt above.
+              </div>
+            )}
+          </>
         )}
 
         {/* Step results */}
@@ -768,7 +822,7 @@ export default function PipelineBuilder({ agents }) {
           </div>
         )}
 
-        {/* ── Interactive follow-up chat with final agent ── */}
+        {/* Interactive follow-up chat with final agent */}
         {pipelineDone && lastResult?.status === 'done' && lastAgent && apiKey && (
           <div className="pipeline-chat-section">
             <div className="pipeline-chat-header">
@@ -807,7 +861,7 @@ export default function PipelineBuilder({ agents }) {
                 <ErrorBanner
                   msg={chatError}
                   code={chatErrorCode}
-                  onOpenSettings={() => setShowSettings(true)}
+                  onDismiss={() => { setChatError(''); setChatErrorCode(''); }}
                 />
               )}
               <div ref={bottomRef} />
@@ -823,12 +877,16 @@ export default function PipelineBuilder({ agents }) {
                 onKeyDown={onChatKeyDown}
                 rows={1}
               />
-              <button className="chat-send-btn"
+              <button
+                className="chat-send-btn"
                 onClick={sendChatMessage}
                 disabled={!chatInput.trim() || chatLoading}
               >
                 {chatLoading ? <Loader size={13} className="spin" /> : <Send size={13} />}
               </button>
+            </div>
+            <div className="chat-footer-model">
+              <Bot size={9} /> {modelLabel}
             </div>
           </div>
         )}
