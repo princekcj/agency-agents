@@ -116,9 +116,9 @@ export default function GreetingOverlay({ stats, onDone, speak }) {
         {lines.map((line, i) => (
           <div
             key={i}
-            className={`greeting-line${i <= lineIdx ? ' line-appear' : ''}`}
+            className="greeting-line"
             style={{
-              animationDelay: `${i * 0.06}s`,
+              visibility: i <= lineIdx ? 'visible' : 'hidden',
               color:
                 i === 0
                   ? '#dc2626'
