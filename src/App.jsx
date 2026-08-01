@@ -239,10 +239,10 @@ function DashboardView({ stats24h, activities, stats, onNavigateAgents }) {
         {stats24h.topAgents?.length > 0 ? (
           <div className="dash-top-agents">
             {stats24h.topAgents.map((ag, i) => (
-              <div key={ag.agentId} className="dash-agent-row">
+              <div key={ag.name ?? i} className="dash-agent-row">
                 <span className="dash-agent-rank">#{i + 1}</span>
-                <span className="dash-agent-emoji">{ag.agentEmoji}</span>
-                <span className="dash-agent-name">{ag.agentName}</span>
+                <span className="dash-agent-emoji">{ag.emoji}</span>
+                <span className="dash-agent-name">{ag.name}</span>
                 <span className="dash-agent-count">{ag.count}</span>
               </div>
             ))}

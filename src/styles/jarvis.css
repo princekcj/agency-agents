@@ -3584,10 +3584,11 @@ body {
 
 /* ── Constellation View ──────────────────────────────────────────────────────── */
 .constellation-wrap {
-  /* Fill exactly the space below the header bar */
+  /* Span all three grid columns so no sidebar gap appears on either side */
+  grid-column: 1 / -1;
   position: relative;
   width: 100%;
-  height: calc(100vh - 56px);
+  height: calc(100vh - 60px);
   background: #080000;
   overflow: hidden;
   display: block;

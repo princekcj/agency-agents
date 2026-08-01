@@ -81,12 +81,30 @@ function loadAgents() {
   return agents;
 }
 
-let agentsCache = null;
+// Eagerly load all agents at startup so every API — including /api/stats —
+// reflects all 249 agents from disk immediately, even before the first request.
+let agentsCache = loadAgents();
+console.log(`Loaded ${agentsCache.length} agent(s) from disk.`);
+
 function getAgents() {
-  if (!agentsCache) agentsCache = loadAgents();
   return agentsCache;
 }
 
+
+// Bust the cache and reload from disk (e.g. after a hot-update of .md files)
+function reloadAgents() {
+  agentsCache = loadAgents();
+  return agentsCache;
+}
+
+// Optional: expose a reload endpoint so a running deployment can pick up new
+// agent files without a full restart.
+app.post('/api/agents/reload', (req, res) => {
+  const agents = reloadAgents();
+  res.json({ ok: true, total: agents.length });
+});
+
+// Routes
 app.get('/api/agents', (req, res) => {
   const { search, division } = req.query;
   let agents = getAgents();
