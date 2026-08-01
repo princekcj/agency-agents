@@ -462,7 +462,7 @@ app.post('/api/install', async (req, res) => {
 
   const runInstall = () => {
     const install = spawn('bash', ['scripts/install.sh',
-      '--agent', agentArg,
+      '--agent', agent.slug,   // install.sh expects slug only, not division/slug
       '--no-interactive',
       ...toolArgs,
     ]);
