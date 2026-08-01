@@ -517,10 +517,8 @@ export default function App() {
   const refresh24h = useCallback(() => {
     fetch('/api/stats/24h').then(r => r.json()).then(s24h => {
       setDivisions(div => {
-        const byDivisionArray = Object.entries(s24h.byDivision || {}).map(([divId, count]) => {
-          const info = div.find(d => d.id === divId) || {};
-          return { id: divId, label: info.label || divId, color: info.color || '#dc2626', count };
-        }).sort((a, b) => b.count - a.count);
+        const byDivisionArray = (Array.isArray(s24h.byDivision) ? s24h.byDivision : [])
+          .sort((a, b) => b.count - a.count);
         setStats24h({ ...s24h, byDivision: byDivisionArray });
         return div;
       });
@@ -574,6 +572,7 @@ export default function App() {
         const info = div.find(d => d.id === divId) || {};
         return { id: divId, label: info.label || divId, color: info.color || '#dc2626', count };
       }).sort((a, b) => b.count - a.count);
+
       setStats24h({ ...s24h, byDivision: byDivisionArray });
       setDataReady(true);
     }).catch(() => setDataReady(true));
