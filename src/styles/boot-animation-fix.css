@@ -1,0 +1,117 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   BOOT / GREETING SCREEN ANIMATION FIX
+   Replaces expensive paint/layout triggers with GPU-composited
+   transform + opacity-only animations.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Removing backdrop-filter from the boot screen root prevents a compositing
+   conflict where the browser re-paints the blurred backdrop every frame that
+   a ring rotates — the single biggest source of jank. */
+.ultron-boot {
+  backdrop-filter: none;
+}
+
+/* Promote every animated element to its own GPU layer so their animations
+   are handled by the compositor thread, not the main thread. */
+.boot-ring,
+.greeting-ring {
+  will-change: transform;
+}
+
+.boot-eye,
+.boot-eye-core {
+  will-change: transform, opacity;
+}
+
+.greeting-logo {
+  will-change: transform, opacity;
+}
+
+/* ── Waveform bars ──────────────────────────────────────────────────────────
+   Original: animates `height` (forces layout recalc every frame for 30 bars).
+   Fix: set height to the target value and animate scaleY instead — pure
+   compositor operation, no layout, no paint.                               */
+
+.boot-bar {
+  height: var(--bar-h, 30px) !important;
+  transform-origin: center bottom;
+  transform: scaleY(0.07);
+  will-change: transform, opacity;
+  transition: none !important;
+}
+
+.boot-bar.idle {
+  transform: scaleY(0.07) !important;
+}
+
+.boot-bar.animate {
+  animation-name: bar-wave-smooth;
+  animation-duration: var(--dur, 0.4s);
+  animation-delay: var(--dly, 0s);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+  animation-fill-mode: both;
+}
+
+@keyframes bar-wave-smooth {
+  0%   { transform: scaleY(0.07); opacity: 0.35; }
+  100% { transform: scaleY(1);    opacity: 1;    }
+}
+
+/* ── Segment appear ─────────────────────────────────────────────────────────
+   Original: uses filter:blur(3px) — forces GPU texture re-upload every frame.
+   Fix: pure translateY + opacity, both handled by compositor.               */
+
+.boot-seg {
+  animation: seg-appear-smooth 0.55s cubic-bezier(0.22, 0.8, 0.3, 1) both;
+  will-change: opacity, transform;
+}
+
+@keyframes seg-appear-smooth {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+/* ── Eye animations ─────────────────────────────────────────────────────────
+   Original: animates box-shadow on every frame — triggers paint.
+   Fix: animate only transform:scale + opacity. The static box-shadow stays
+   in the base rule and never changes, so no paint is needed.                */
+
+@keyframes eye-idle {
+  0%, 100% { transform: scale(1);    opacity: 0.82; }
+  50%       { transform: scale(1.03); opacity: 1;    }
+}
+
+@keyframes eye-active {
+  0%, 100% { transform: scale(1);    opacity: 0.9; }
+  50%       { transform: scale(1.06); opacity: 1;   }
+}
+
+@keyframes eye-pulse {
+  0%, 100% { transform: scale(1);   opacity: 0.85; }
+  50%       { transform: scale(1.1); opacity: 1;    }
+}
+
+@keyframes eye-core-pulse {
+  0%, 100% { opacity: 0.55; }
+  50%       { opacity: 1;    }
+}
+
+/* ── Boot log lines ─────────────────────────────────────────────────────────
+   Promote to compositor layer so each new line fades in without triggering
+   a full repaint of the panel.                                               */
+
+.boot-log-line {
+  will-change: opacity, transform;
+}
+
+/* ── Greeting overlay ───────────────────────────────────────────────────────
+   Remove backdrop-filter for the same reason as the boot screen.            */
+.greeting-overlay {
+  backdrop-filter: none;
+}
+
+.greeting-line {
+  will-change: opacity, transform;
+}
