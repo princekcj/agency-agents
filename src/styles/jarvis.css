@@ -994,18 +994,6 @@ body {
 
 .greeting-line {
   line-height: 1.5;
-  will-change: opacity, transform;
-  opacity: 0;
-  transform: translateY(14px);
-}
-
-.greeting-line.line-appear {
-  animation: greet-line-in 0.5s ease forwards;
-}
-
-@keyframes greet-line-in {
-  from { opacity: 0; transform: translateY(14px); }
-  to   { opacity: 1; transform: translateY(0); }
 }
 
 .greeting-skip {
@@ -2371,7 +2359,6 @@ body {
   gap: 7px;
 }
 
-/* Auth variant — amber */
 .error-banner--auth {
   background: rgba(245, 158, 11, 0.07);
   border-color: rgba(245, 158, 11, 0.3);
@@ -2379,7 +2366,6 @@ body {
 }
 .error-banner--auth .error-banner-icon { color: #f59e0b; margin-top: 1px; flex-shrink: 0; }
 
-/* Quota variant — blue */
 .error-banner--quota {
   background: rgba(59, 130, 246, 0.07);
   border-color: rgba(59, 130, 246, 0.3);
@@ -2387,7 +2373,6 @@ body {
 }
 .error-banner--quota .error-banner-icon { color: #60a5fa; margin-top: 1px; flex-shrink: 0; }
 
-/* Generic variant — red */
 .error-banner--generic {
   background: rgba(239, 68, 68, 0.07);
   border-color: rgba(239, 68, 68, 0.25);
@@ -3407,46 +3392,33 @@ body {
    RESPONSIVE
    ================================================================ */
 
-/* ---- Tablet (≤ 1024px) ---------------------------------------- */
 @media (max-width: 1024px) {
   .app-layout {
     grid-template-columns: 200px 1fr;
   }
-
   .agents-layout {
     grid-template-columns: 200px 1fr;
   }
-
-  /* Hide the right intel panel */
   .hud-right { display: none; }
-
   .dashboard-layout {
     grid-template-columns: 240px 1fr;
   }
   .dash-right { display: none; }
-
   .pipeline-layout {
     grid-template-columns: 240px 1fr;
   }
-
-  /* Shrink header stats */
   .hud-stat  { display: none; }
   .hud-sep   { display: none; }
   .status-text { display: none; }
 }
 
-/* ---- Mobile (≤ 768px) ----------------------------------------- */
 @media (max-width: 768px) {
-
-  /* -- Root layout ------------------------------------------------ */
   .app-layout {
     grid-template-columns: 1fr;
     grid-template-rows: 56px 1fr;
-    height: 100vh;  /* fallback */
-    height: 100dvh; /* shrinks when browser chrome is visible */
+    height: 100vh;
+    height: 100dvh;
   }
-
-  /* -- Header ----------------------------------------------------- */
   .hud-header {
     padding: 0 10px;
     gap: 0;
@@ -3456,8 +3428,6 @@ body {
   .hud-logo-title { font-size: 12px; letter-spacing: 2px; }
   .hud-logo-sub   { display: none; }
   .hud-header-right { display: none; }
-
-  /* Nav: icon + label, compact */
   .hud-nav { gap: 3px; }
   .hud-nav-btn {
     padding: 5px 9px;
@@ -3465,8 +3435,6 @@ body {
     letter-spacing: 0.8px;
     gap: 3px;
   }
-
-  /* -- Agents view ------------------------------------------------ */
   .agents-layout {
     grid-template-columns: 1fr;
     height: calc(100vh  - 56px);
@@ -3474,20 +3442,14 @@ body {
   }
   .hud-sidebar { display: none; }
   .hud-right   { display: none; }
-
   .search-bar { padding: 8px 10px; gap: 6px; }
-
-  /* Hide the "Chat with agent" hint pill in search bar */
   .agents-chat-hint { display: none; }
-
   .agents-grid {
     padding: 8px;
     gap: 8px;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   }
   .agent-card { padding: 10px 10px 28px; }
-
-  /* -- Dashboard -------------------------------------------------- */
   .dashboard-layout {
     grid-template-columns: 1fr;
     grid-template-rows: none;
@@ -3505,11 +3467,7 @@ body {
     border-bottom: 1px solid var(--border-dim);
   }
   .dash-right { display: none; }
-
-  /* Shrink the big hero number on mobile */
   .dash-hero-number { font-size: 40px; }
-
-  /* -- Pipeline --------------------------------------------------- */
   .pipeline-view {
     height: calc(100vh  - 56px);
     height: calc(100dvh - 56px);
@@ -3535,18 +3493,12 @@ body {
   }
   .pipeline-run-row  { flex-wrap: wrap; }
   .pipeline-settings-btn { padding: 5px; }
-
-  /* Pipeline chat section on mobile */
   .pipeline-chat-messages { max-height: 220px; }
-
-  /* -- Chat panel — full-screen sheet ----------------------------- */
   .chat-panel {
     width: 100vw;
     border-left: none;
     border-top: 1px solid var(--border-glow);
   }
-
-  /* -- Deploy modal — bottom sheet on mobile ---------------------- */
   .overlay {
     align-items: flex-end;
     padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -3566,15 +3518,11 @@ body {
     flex-wrap: wrap;
     gap: 8px;
   }
-
-  /* -- Error banner compact on mobile ----------------------------- */
   .error-banner:not(.compact) {
     padding: 8px 10px;
     gap: 8px;
   }
   .error-banner-sub { font-size: 10px; }
-
-  /* -- Detail / voice overlays ------------------------------------ */
   .detail-overlay,
   .voice-overlay {
     align-items: flex-end;
@@ -3595,7 +3543,6 @@ body {
 
 /* ── Constellation View ──────────────────────────────────────────────────────── */
 .constellation-wrap {
-  /* Span all three grid columns so no sidebar gap appears on either side */
   grid-column: 1 / -1;
   position: relative;
   width: 100%;
@@ -3605,7 +3552,6 @@ body {
   display: block;
 }
 
-/* Centred overlay — does NOT affect layout */
 .constellation-header {
   position: absolute;
   top: 16px;
@@ -3640,7 +3586,6 @@ body {
   white-space: nowrap;
 }
 
-/* Canvas fills the entire wrapper */
 .constellation-canvas {
   position: absolute;
   inset: 0;
@@ -3648,25 +3593,20 @@ body {
   height: 100%;
 }
 
-/* 3d-force-graph injects a <canvas> — make it fill too */
 .constellation-canvas canvas {
   display: block !important;
   width: 100% !important;
   height: 100% !important;
 }
 
-/* ── Mobile tweaks ── */
 @media (max-width: 640px) {
   .constellation-wrap {
-    /* Account for taller mobile browser chrome */
     height: calc(100dvh - 56px);
   }
-
   .constellation-title {
     font-size: 9px;
     letter-spacing: 2px;
   }
-
   .constellation-sub {
     font-size: 8px;
     letter-spacing: 1px;
