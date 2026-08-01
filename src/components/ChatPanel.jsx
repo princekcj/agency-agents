@@ -1,16 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { X, Send, Settings, Bot, User, Loader, Key, Trash2, Download } from 'lucide-react';
 import ErrorBanner from './ErrorBanner.jsx';
-
-const FREE_MODELS = [
-  { id: 'meta-llama/llama-3.3-70b-instruct:free',   label: 'Llama 3.3 70B' },
-  { id: 'deepseek/deepseek-r1:free',                 label: 'DeepSeek R1' },
-  { id: 'deepseek/deepseek-chat-v3-0324:free',       label: 'DeepSeek V3' },
-  { id: 'google/gemma-3-27b-it:free',                label: 'Gemma 3 27B' },
-  { id: 'mistralai/mistral-7b-instruct:free',        label: 'Mistral 7B' },
-  { id: 'microsoft/phi-3-mini-128k-instruct:free',   label: 'Phi-3 Mini' },
-  { id: 'qwen/qwen3-8b:free',                        label: 'Qwen3 8B' },
-];
+import { FREE_MODELS, OPENROUTER_FREE_MODELS_URL, normalizeFreeModel } from '../lib/freeModels.js';
 
 const LS_KEY = 'agency_openrouter_key';
 const LS_MDL = 'agency_openrouter_model';
@@ -60,7 +51,7 @@ function downloadMarkdown(agent, messages) {
 
 export default function ChatPanel({ agent, onClose, initialContext }) {
   const [apiKey, setApiKey]     = useState(() => sanitizeHeaderValue(localStorage.getItem(LS_KEY) || ''));
-  const [model, setModel]       = useState(() => localStorage.getItem(LS_MDL) || FREE_MODELS[0].id);
+  const [model, setModel]       = useState(() => normalizeFreeModel(localStorage.getItem(LS_MDL) || FREE_MODELS[0].id));
   const [messages, setMessages] = useState(() => {
     if (initialContext) {
       return [{ role: 'assistant', content: initialContext }];
@@ -97,7 +88,7 @@ export default function ChatPanel({ agent, onClose, initialContext }) {
     setShowSettings(false);
   };
 
-  const saveModel = (m) => { setModel(m); localStorage.setItem(LS_MDL, m); };
+  const saveModel = (m) => { const freeModel = normalizeFreeModel(m); setModel(freeModel); localStorage.setItem(LS_MDL, freeModel); };
   const clearHistory = () => setMessages([]);
   const exportChat = () => { if (messages.length) downloadMarkdown(agent, messages); };
 
@@ -194,7 +185,7 @@ export default function ChatPanel({ agent, onClose, initialContext }) {
             />
             <button className="chat-save-btn" onClick={saveKey}>Save</button>
           </div>
-          <div className="chat-settings-row" style={{ marginTop: 10 }}><Bot size={11} /><span>Free Model</span></div>
+          <div className="chat-settings-row" style={{ marginTop: 10 }}><Bot size={11} /><span>Free Model</span><a href={OPENROUTER_FREE_MODELS_URL} target="_blank" rel="noreferrer" className="chat-settings-link">OpenRouter free list</a></div>
           <div className="chat-model-list">
             {FREE_MODELS.map(m => (
               <button key={m.id} className={`chat-model-btn ${model === m.id ? 'active' : ''}`} onClick={() => saveModel(m.id)}>

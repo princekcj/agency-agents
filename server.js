@@ -12,6 +12,15 @@ import cron from 'node-cron';
 
 // ElevenLabs voice ID
 const ELEVENLABS_VOICE_ID = 'Vs5CmVCVJwW4odQS2pVf';
+const DEFAULT_FREE_MODEL = 'openrouter/free';
+
+function isFreeOpenRouterModel(model) {
+  return model === DEFAULT_FREE_MODEL || String(model || '').endsWith(':free');
+}
+
+function normalizeFreeOpenRouterModel(model) {
+  return isFreeOpenRouterModel(model) ? model : DEFAULT_FREE_MODEL;
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -169,10 +178,8 @@ app.post('/api/tts', async (req, res) => {
 // -- Real activity log ---------------------------------------------------------
 const activityLog = [];
 
-app.post('/api/activity', (req, res) => {
-  const { agentId, agentName, agentEmoji, division, divisionColor, action } = req.body;
-  if (!agentName || !action) return res.status(400).json({ error: 'Missing fields' });
-
+function recordActivity({ agentId, agentName, agentEmoji, division, divisionColor, action, status = 'done', result = null }) {
+  if (!agentName || !action) return null;
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const entry = {
     id,
@@ -182,16 +189,20 @@ app.post('/api/activity', (req, res) => {
     division: division || 'unknown',
     divisionColor: divisionColor || '#dc2626',
     action,
-    status: 'done',
+    status,
     startedAt: new Date().toISOString(),
     completedAt: new Date().toISOString(),
-    result: null,
+    result,
   };
-
   activityLog.unshift(entry);
   if (activityLog.length > 100) activityLog.length = 100;
-
   broadcast({ type: 'agent_done', entry });
+  return entry;
+}
+
+app.post('/api/activity', (req, res) => {
+  const entry = recordActivity(req.body);
+  if (!entry) return res.status(400).json({ error: 'Missing fields' });
   res.json({ ok: true });
 });
 
@@ -216,7 +227,16 @@ app.get('/api/stats/24h', (req, res) => {
   }
   const topAgents = Object.values(agentCounts).sort((a, b) => b.count - a.count).slice(0, 5);
 
-  res.json({ total: recent.length, byDivision, topAgents });
+  const byHour = Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0 }));
+  for (const e of recent) byHour[new Date(e.startedAt).getHours()].count++;
+  const byDivisionRows = Object.entries(byDivision).map(([id, count]) => ({
+    id,
+    count,
+    label: DIVISIONS[id]?.label || id,
+    color: DIVISIONS[id]?.color || '#dc2626',
+  }));
+
+  res.json({ total: recent.length, byDivision: byDivisionRows, topAgents, byHour });
 });
 
 // -- Scheduler Security --------------------------------------------------------
@@ -288,7 +308,7 @@ app.post('/api/scheduler/schedules', requireSchedulerToken, (req, res) => {
   if (!cron.validate(cronExpr)) return res.status(400).json({ error: 'Invalid cron expression' });
 
   const id = `sched-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  const schedule = { id, name, cron: cronExpr, pipeline, model: model || 'meta-llama/llama-3.3-70b-instruct:free', initialInput: initialInput || '', encryptedKey, active: true, lastRun: null, nextRun: null };
+  const schedule = { id, name, cron: cronExpr, pipeline, model: normalizeFreeOpenRouterModel(model), initialInput: initialInput || '', encryptedKey, active: true, lastRun: null, nextRun: null };
   schedules.push(schedule);
   saveSchedules();
   registerCronJob(schedule);
@@ -327,7 +347,9 @@ app.post('/api/chat', async (req, res) => {
   const apiKey = sanitizeHeaderValue(rawKey);
   if (!apiKey) return res.status(401).json({ error: 'API key contains only invalid characters. Re-enter it in settings.' });
 
-  const { messages, model = 'meta-llama/llama-3.3-70b-instruct:free', stream = false } = req.body;
+  const { messages, model = DEFAULT_FREE_MODEL, stream = false } = req.body;
+  const freeModel = normalizeFreeOpenRouterModel(model);
+  if (model && freeModel !== model) return res.status(400).json({ error: 'Only OpenRouter free models are allowed. Choose a model from https://openrouter.ai/collections/free-models', code: 'MODEL_NOT_FREE' });
   if (!messages || !Array.isArray(messages)) return res.status(400).json({ error: 'messages[] required' });
 
   try {
@@ -339,7 +361,7 @@ app.post('/api/chat', async (req, res) => {
         'HTTP-Referer': 'https://the-agency.replit.app',
         'X-Title': 'The Agency - Ultron Protocol',
       },
-      body: JSON.stringify({ model, messages, stream }),
+      body: JSON.stringify({ model: freeModel, messages, stream }),
     });
 
     if (!upstream.ok) {
@@ -368,6 +390,50 @@ app.post('/api/chat', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+
+// -- Single-agent install to selected tools - streams output via WebSocket -----
+app.post('/api/install/agent', async (req, res) => {
+  const { division, slug, tools = [] } = req.body;
+  if (!division || !slug) return res.status(400).json({ error: 'division and slug required' });
+  if (!Array.isArray(tools) || tools.length === 0) return res.status(400).json({ error: 'Select at least one tool' });
+
+  const agents = getAgents();
+  const agent = agents.find(a => a.division === division && a.slug === slug);
+  if (!agent) return res.status(404).json({ error: 'Agent not found' });
+
+  res.json({ ok: true });
+
+  recordActivity({
+    agentId: agent.id,
+    agentName: agent.name,
+    agentEmoji: agent.emoji,
+    division: agent.division,
+    divisionColor: agent.divisionColor,
+    action: `Deploying to ${tools.join(', ')}`,
+    status: 'running',
+  });
+
+  broadcast({ type: 'install_start', agentId: agent.id });
+  const args = ['scripts/install.sh', '--agent', `${division}/${slug}`, '--no-interactive'];
+  for (const tool of tools) args.push('--tool', sanitizeHeaderValue(tool));
+
+  const install = spawn('bash', args, { cwd: __dirname, stdio: ['ignore', 'pipe', 'pipe'] });
+  install.stdout.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
+  install.stderr.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
+  install.on('close', code => {
+    recordActivity({
+      agentId: agent.id,
+      agentName: agent.name,
+      agentEmoji: agent.emoji,
+      division: agent.division,
+      divisionColor: agent.divisionColor,
+      action: code === 0 ? `Deployed to ${tools.join(', ')}` : `Deploy failed for ${tools.join(', ')}`,
+      status: code === 0 ? 'done' : 'error',
+    });
+    broadcast({ type: 'install_done', exitCode: code, agentId: agent.id });
+  });
 });
 
 // -- Single-agent install - streams output via WebSocket -----------------------
@@ -445,7 +511,7 @@ async function runSchedule(schedule) {
           'HTTP-Referer': 'https://the-agency.replit.app',
           'X-Title': 'The Agency - Scheduled Pipeline',
         },
-        body: JSON.stringify({ model, stream: false, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userContent }] }),
+        body: JSON.stringify({ model: normalizeFreeOpenRouterModel(model), stream: false, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userContent }] }),
       });
 
       const data = await resp.json();
@@ -492,6 +558,7 @@ app.post('/api/openclaw/convert', (req, res) => {
 
 app.post('/api/openclaw/install', (req, res) => {
   res.json({ ok: true });
+  recordActivity({ agentName: 'All Agency Agents', agentEmoji: '🚀', division: 'all', divisionColor: '#dc2626', action: 'Deploying all agents to OpenClaw', status: 'running' });
 
   // Always run convert first to ensure workspace files are fresh, then install.
   broadcast({ type: 'install_log', text: '[openclaw] Generating workspaces...\n' });
@@ -513,7 +580,10 @@ app.post('/api/openclaw/install', (req, res) => {
     });
     install.stdout.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
     install.stderr.on('data', d => broadcast({ type: 'install_log', text: d.toString() }));
-    install.on('close', code => broadcast({ type: 'install_done', exitCode: code }));
+    install.on('close', code => {
+      recordActivity({ agentName: 'All Agency Agents', agentEmoji: '🚀', division: 'all', divisionColor: '#dc2626', action: code === 0 ? 'Deployed all agents to OpenClaw' : 'Deploy all agents failed', status: code === 0 ? 'done' : 'error' });
+      broadcast({ type: 'install_done', exitCode: code });
+    });
   });
 });
 
