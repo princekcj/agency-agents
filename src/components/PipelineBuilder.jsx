@@ -12,6 +12,7 @@ function sanitizeHeaderValue(value) {
   return String(value || '').replace(/[^\x20-\x7E]/g, '').trim();
 }
 
+
 const INTERVALS = [
   { label: 'Every hour',    cron: '0 * * * *' },
   { label: 'Every 4 hours', cron: '0 */4 * * *' },

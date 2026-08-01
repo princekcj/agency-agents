@@ -309,6 +309,7 @@ app.post('/api/scheduler/schedules', requireSchedulerToken, (req, res) => {
 
   const id = `sched-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const schedule = { id, name, cron: cronExpr, pipeline, model: normalizeFreeOpenRouterModel(model), initialInput: initialInput || '', encryptedKey, active: true, lastRun: null, nextRun: null };
+
   schedules.push(schedule);
   saveSchedules();
   registerCronJob(schedule);
@@ -339,8 +340,9 @@ app.patch('/api/scheduler/schedules/:id/toggle', requireSchedulerToken, (req, re
 
 // -- OpenRouter chat proxy -----------------------------------------------------
 app.post('/api/chat', async (req, res) => {
-  const rawKey = req.headers['x-openrouter-key'];
-  if (!rawKey) return res.status(401).json({ error: 'Provide x-openrouter-key header' });
+  // Accept key from header (BYOK) or fall back to server-side env secret
+  const rawKey = req.headers['x-openrouter-key'] || process.env.OPENROUTER_API_KEY || '';
+  if (!rawKey) return res.status(401).json({ error: 'No OpenRouter API key. Add one in Settings or ask the server admin to set OPENROUTER_API_KEY.', code: 'NO_KEY' });
 
   // Sanitize to ASCII-safe range — guards against non-Latin-1 chars that would
   // throw a ByteString error in Node.js fetch when set as a header value.
@@ -350,6 +352,7 @@ app.post('/api/chat', async (req, res) => {
   const { messages, model = DEFAULT_FREE_MODEL, stream = false } = req.body;
   const freeModel = normalizeFreeOpenRouterModel(model);
   if (model && freeModel !== model) return res.status(400).json({ error: 'Only OpenRouter free models are allowed. Choose a model from https://openrouter.ai/collections/free-models', code: 'MODEL_NOT_FREE' });
+
   if (!messages || !Array.isArray(messages)) return res.status(400).json({ error: 'messages[] required' });
 
   try {
